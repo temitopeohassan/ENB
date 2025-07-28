@@ -5,29 +5,16 @@ import { useAccount, useWriteContract } from 'wagmi';
 import { ENB_MINI_APP_ABI, ENB_MINI_APP_ADDRESS } from '../constants/enbMiniAppAbi';
 import { API_BASE_URL } from '../config';
 import {
-  createWalletClient,
   createPublicClient,
   encodeFunctionData,
   http,
-  custom,
   EIP1193Provider,
-  Hash,
-  WalletClient
+  Hash
 } from 'viem';
 import { base } from 'viem/chains';
-import { getReferralTag, submitReferral } from '@divvi/referral-sdk';
 import { Button } from "./Button";
 import { Icon } from "./Icon";
 import { sdk } from '@farcaster/frame-sdk';
-
-// Updated Divvi configuration with proper typing for v2
-const DIVVI_CONFIG = {
-  consumer: '0xaF108Dd1aC530F1c4BdED13f43E336A9cec92B44' as `0x${string}`,
-  providers: [
-    '0x0423189886d7966f0dd7e7d256898daeee625dca' as `0x${string}`,
-    '0xc95876688026be9d6fa7a7c33328bd013effa2bb' as `0x${string}`
-  ]
-} as const;
 
 interface User {
   walletAddress: string;
@@ -36,12 +23,6 @@ interface User {
 
 interface CreateProps {
   setActiveTabAction: (tab: string) => void;
-}
-
-interface DivviReferralData {
-  referralTag: string;
-  walletClient: WalletClient;
-  chainId: number;
 }
 
 export const Create: React.FC<CreateProps> = ({ setActiveTabAction }) => {
@@ -60,185 +41,175 @@ export const Create: React.FC<CreateProps> = ({ setActiveTabAction }) => {
 
   useEffect(() => {
     const checkExistingAccount = async () => {
+      console.log('🔍 Checking existing account...');
+      console.log('📋 Check data:', { address, isConnected });
+      
       if (!address || !isConnected) {
+        console.log('❌ No address or not connected, skipping check');
         setIsCheckingAccount(false);
         return;
       }
 
       try {
+        console.log('📤 Fetching users from API...');
         const response = await fetch(`${API_BASE_URL}/api/users?limit=1000`);
-        if (!response.ok) throw new Error('Failed to fetch users');
+        console.log('📥 Users response status:', response.status);
+        
+        if (!response.ok) {
+          console.error('❌ Failed to fetch users:', response.status);
+          throw new Error('Failed to fetch users');
+        }
 
         const data = await response.json();
+        console.log('📋 Users data received, total users:', data.users?.length || 0);
+        
         const user = data.users.find((u: User) =>
           u.walletAddress.toLowerCase() === address.toLowerCase()
         );
+        
+        console.log('🔍 User search result:', user ? 'Found' : 'Not found');
+        console.log('📋 User details:', user);
 
         if (user) {
           if (user.isActivated) {
+            console.log('✅ User account is activated');
             setAccountCreated(true);
           } else {
+            console.log('⚠️ User account exists but not activated');
             setHasUnactivatedAccount(true);
           }
+        } else {
+          console.log('🆕 No existing account found');
         }
       } catch (error) {
-        console.error('Error checking account:', error);
+        console.error('❌ Error checking account:', error);
         setError('Failed to check account status');
       } finally {
         setIsCheckingAccount(false);
+        console.log('🏁 Account check finished');
       }
     };
 
     checkExistingAccount();
   }, [address, isConnected]);
 
-  // Updated setupDivviReferral for v2 - now requires user parameter
-  const setupDivviReferral = async (): Promise<DivviReferralData | null> => {
-    try {
-      if (!address || typeof window === 'undefined' || !window.ethereum) {
-        console.warn('Missing requirements for Divvi referral setup');
-        return null;
-      }
-
-      const ethereum = window.ethereum as EIP1193Provider;
-      
-      const walletClient = createWalletClient({
-        chain: base,
-        transport: custom(ethereum)
-      });
-
-      const chainId = await walletClient.getChainId();
-
-      // v2 Migration: getReferralTag now requires user parameter for proper attribution
-      const referralTag = getReferralTag({
-        user: address, // Required in v2 for proper referral attribution
-        consumer: DIVVI_CONFIG.consumer,
-        providers: DIVVI_CONFIG.providers
-      });
-
-      console.log('Divvi referral setup successful with v2 SDK');
-      return { referralTag, walletClient, chainId };
-    } catch (error) {
-      console.warn('Divvi referral setup failed:', error);
-      return null;
-    }
-  };
-
-  const submitDivviReferral = async (
-    divviData: DivviReferralData,
-    txHash: Hash
-  ) => {
-    try {
-      await submitReferral({ 
-        txHash, 
-        chainId: divviData.chainId 
-      });
-      console.log('Divvi referral submitted successfully');
-    } catch (error) {
-      console.warn('Divvi referral submission failed:', error);
-    }
-  };
-
   const handleCreateAccount = async () => {
+    console.log('🚀 Starting account creation process...');
+    console.log('📋 Current state:', { address, isConnected });
+    
     if (!address || !isConnected) {
+      console.log('❌ Wallet not connected');
       setError('Please connect your wallet first');
       return;
     }
 
     setIsCreatingAccount(true);
     setError(null);
+    console.log('✅ Wallet connected, proceeding with account creation');
 
     try {
+      console.log('🔧 Creating public client...');
       const publicClient = createPublicClient({ 
         chain: base, 
         transport: http() 
       });
-
-      // Setup Divvi referral with v2 SDK
-      const divviData = await setupDivviReferral();
+      console.log('✅ Public client created');
 
       // Prepare transaction data
+      console.log('📝 Preparing transaction data...');
       const baseTxData = encodeFunctionData({
         abi: ENB_MINI_APP_ABI,
         functionName: 'createAccount',
-        args: [address]
+        args: []
       });
-
-      // v2 Migration: referralTag is now properly formatted for dataSuffix
-      const finalTxData = divviData 
-        ? (baseTxData + divviData.referralTag.slice(2)) as `0x${string}` // Remove '0x' prefix to avoid duplication
-        : baseTxData;
+      console.log('✅ Transaction data prepared:', baseTxData);
 
       // Estimate gas
+      console.log('⛽ Estimating gas...');
       let gasEstimate: bigint;
       try {
         gasEstimate = await publicClient.estimateGas({
           account: address,
           to: ENB_MINI_APP_ADDRESS,
-          data: finalTxData
+          data: baseTxData
         });
         // Add 20% buffer for gas estimation
         gasEstimate = gasEstimate + (gasEstimate * BigInt(20)) / BigInt(100);
+        console.log('✅ Gas estimated:', gasEstimate.toString());
       } catch (error) {
-        console.warn('Gas estimation failed, using fallback:', error);
+        console.warn('⚠️ Gas estimation failed, using fallback:', error);
         gasEstimate = BigInt(150000); // Increased fallback
+        console.log('🔄 Using fallback gas:', gasEstimate.toString());
       }
 
       // Execute transaction
+      console.log('💸 Executing transaction...');
       let txHash: Hash;
       
       if (window.ethereum) {
+        console.log('🔗 Using window.ethereum for transaction');
+        const txParams = {
+          from: address,
+          to: ENB_MINI_APP_ADDRESS as `0x${string}`,
+          data: baseTxData,
+          gas: `0x${gasEstimate.toString(16)}` as `0x${string}`
+        };
+        console.log('📋 Transaction params:', txParams);
+        
         txHash = await (window.ethereum as EIP1193Provider).request({
           method: 'eth_sendTransaction',
-          params: [{
-            from: address,
-            to: ENB_MINI_APP_ADDRESS as `0x${string}`,
-            data: finalTxData,
-            gas: `0x${gasEstimate.toString(16)}` as `0x${string}`
-          }]
+          params: [txParams]
         }) as Hash;
+        console.log('✅ Transaction sent via window.ethereum, hash:', txHash);
       } else {
-        // Fallback to wagmi writeContract if no direct ethereum access
+        console.log('🔗 Using wagmi writeContract as fallback');
         txHash = await writeContractAsync({
           address: ENB_MINI_APP_ADDRESS,
           abi: ENB_MINI_APP_ABI,
           functionName: 'createAccount',
-          args: [address],
-          // Note: dataSuffix not directly supported in wagmi, would need custom implementation
+          args: [],
         });
-      }
-
-      // Submit Divvi referral if setup was successful
-      if (divviData && txHash) {
-        await submitDivviReferral(divviData, txHash);
+        console.log('✅ Transaction sent via wagmi, hash:', txHash);
       }
 
       // Sync with backend
+      console.log('🔄 Syncing with backend...');
+      const backendPayload = { 
+        walletAddress: address, 
+        transactionHash: txHash 
+      };
+      console.log('📤 Backend payload:', backendPayload);
+      
       const backendResponse = await fetch(`${API_BASE_URL}/api/create-account`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          walletAddress: address, 
-          transactionHash: txHash 
-        })
+        body: JSON.stringify(backendPayload)
       });
 
+      console.log('📥 Backend response status:', backendResponse.status);
+      
       if (!backendResponse.ok) {
         const errorData = await backendResponse.json();
+        console.error('❌ Backend sync failed:', errorData);
         throw new Error(errorData.error || 'Backend sync failed');
       }
+
+      const backendData = await backendResponse.json();
+      console.log('✅ Backend sync successful:', backendData);
 
       setShowCreatedModal(true);
       setAccountCreated(true);
       setHasUnactivatedAccount(true);
+      console.log('🎉 Account creation completed successfully');
     } catch (error) {
-      console.error('Account creation failed:', error);
+      console.error('❌ Account creation failed:', error);
       const errorMessage = error instanceof Error 
         ? error.message 
         : 'Failed to create account';
       setError(errorMessage);
     } finally {
       setIsCreatingAccount(false);
+      console.log('🏁 Account creation process finished');
     }
   };
 
@@ -266,43 +237,56 @@ export const Create: React.FC<CreateProps> = ({ setActiveTabAction }) => {
 
   const handleActivateAccount = async (e: FormEvent) => {
     e.preventDefault();
+    console.log('🔓 Starting account activation process...');
+    console.log('📋 Activation data:', { address, activationCode: activationCode.trim() });
 
     if (!address || !activationCode.trim()) {
+      console.log('❌ Missing required data for activation');
       setError('Please enter a valid invitation code');
       return;
     }
 
     setIsActivating(true);
     setError(null);
+    console.log('✅ Proceeding with activation');
 
     try {
+      const activationPayload = {
+        walletAddress: address,
+        invitationCode: activationCode.trim()
+      };
+      console.log('📤 Sending activation request:', activationPayload);
+      
       const response = await fetch(`${API_BASE_URL}/api/activate-account`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          walletAddress: address,
-          invitationCode: activationCode.trim()
-        })
+        body: JSON.stringify(activationPayload)
       });
 
+      console.log('📥 Activation response status:', response.status);
+      
       const data = await response.json();
+      console.log('📋 Activation response data:', data);
       
       if (!response.ok) {
+        console.error('❌ Activation failed:', data);
         throw new Error(data.error || 'Activation failed');
       }
 
+      console.log('✅ Activation successful');
       setShowActivatedModal(true);
       setAccountCreated(true);
       setHasUnactivatedAccount(false);
       setActivationCode('');
     } catch (error) {
-      console.error('Activation failed:', error);
+      console.error('❌ Activation failed:', error);
       const errorMessage = error instanceof Error 
         ? error.message 
         : 'Activation failed';
       setError(errorMessage);
     } finally {
       setIsActivating(false);
+      console.log('🏁 Activation process finished');
     }
   };
 

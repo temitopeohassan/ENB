@@ -1,19 +1,14 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { useAccount, useWriteContract } from 'wagmi';
-import { ENB_MINI_APP_ABI, ENB_MINI_APP_ADDRESS, ENB_TOKEN_ABI, ENB_TOKEN_ADDRESS } from '../constants/enbMiniAppAbi';
+import { useAccount } from 'wagmi';
+import { ENB_TOKEN_ABI, ENB_TOKEN_ADDRESS } from '../constants/enbMiniAppAbi';
 import { API_BASE_URL } from '../config';
 import {
-  createWalletClient,
   createPublicClient,
-  encodeFunctionData,
-  http,
-  custom,
-  EIP1193Provider
+  http
 } from 'viem';
 import { base } from 'viem/chains';
-import { getReferralTag, submitReferral } from '@divvi/referral-sdk';
 import { Button } from "./Button";
 import { Icon } from "./Icon";
 import { sdk } from '@farcaster/frame-sdk'
@@ -50,7 +45,6 @@ interface AccountProps {
 
 export const Account: React.FC<AccountProps> = ({ setActiveTabAction }) => {
   const { address } = useAccount();
-  const { writeContractAsync } = useWriteContract();
   const [showDailyClaimModal, setShowDailyClaimModal] = useState(false);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [showBoosterModal, setShowBoosterModal] = useState(false);
@@ -64,7 +58,6 @@ export const Account: React.FC<AccountProps> = ({ setActiveTabAction }) => {
   const [error, setError] = useState<string | null>(null);
   const [enbBalance, setEnbBalance] = useState<number>(0);
   const [enbBalanceLoading, setEnbBalanceLoading] = useState(false);
-  const [inviteClaimLoading, setInviteClaimLoading] = useState(false);
 const { context } = useFrame()  
   // Countdown state
   const [timeLeft, setTimeLeft] = useState<{
@@ -118,10 +111,10 @@ const { context } = useFrame()
     },
     {
       id: 'claim-invites',
-      title: 'Claim Extra ENB For Invites',
+      title: 'Receive Extra ENB For Invites',
       description: 'Earn bonus ENB tokens for each person who joins using your invitation code. Check your invitation statistics to see how many people you\'ve invited!',
       targetElementId: 'invitation-stats-section',
-      highlightText: 'Claim $ENB for your invites'
+      highlightText: 'Receive $ENB for your invites'
     },
     {
       id: 'upgrade-level',
@@ -225,6 +218,8 @@ const { context } = useFrame()
     }
   }, []);
 
+
+
   // Update countdown every second
   useEffect(() => {
     if (!profile?.lastDailyClaimTime) return;
@@ -247,10 +242,16 @@ const { context } = useFrame()
       setLoading(true);
       setError(null);
       
+      console.log('Fetching profile from:', `${API_BASE_URL}/api/profile/${address}`);
+      
       const res = await fetch(`${API_BASE_URL}/api/profile/${address}`);
+      
+      console.log('Response status:', res.status);
+      console.log('Response headers:', Object.fromEntries(res.headers.entries()));
       
       if (res.status === 404) {
         // Account doesn't exist, show create message
+        console.log('Account not found, redirecting to create');
         setProfile(null);
         setError('not_created');
         setLoading(false);
@@ -258,14 +259,18 @@ const { context } = useFrame()
       }
       
       if (!res.ok) {
-        throw new Error('Failed to fetch profile');
+        const errorText = await res.text();
+        console.error('API error response:', errorText);
+        throw new Error(`Failed to fetch profile: ${res.status} ${errorText}`);
       }
 
       const userProfile: UserProfile = await res.json();
+      console.log('Profile data received:', userProfile);
       
       // Check if account is not activated
       if (!userProfile.isActivated) {
         // Account exists but not activated, show activation message
+        console.log('Account not activated, redirecting to activate');
         setProfile(userProfile);
         setError('not_activated');
         setLoading(false);
@@ -273,12 +278,13 @@ const { context } = useFrame()
       }
 
       // Account exists and is activated, show profile
+      console.log('Account activated, showing profile');
       setProfile(userProfile);
       // Calculate initial countdown
       calculateTimeLeft(userProfile.lastDailyClaimTime || null);
     } catch (err) {
       console.error('Error checking account status:', err);
-      setError('Failed to load account information');
+      setError(`Failed to load account information: ${err instanceof Error ? err.message : 'Unknown error'}`);
     } finally {
       setLoading(false);
     }
@@ -290,24 +296,33 @@ const { context } = useFrame()
 
 
 const fetchEnbBalance = useCallback(async () => {
-  if (!address) return;
+  console.log('💰 Fetching ENB balance...');
+  console.log('📋 Balance fetch data:', { address });
+  
+  if (!address) {
+    console.log('❌ No address provided for balance fetch');
+    return;
+  }
 
   setEnbBalanceLoading(true);
   try {
+    console.log('📤 Reading contract balance...');
     const balance = await publicClient.readContract({
       address: ENB_TOKEN_ADDRESS as `0x${string}`,
       abi: ENB_TOKEN_ABI,
       functionName: 'balanceOf',
       args: [address as `0x${string}`]
-    });
+    }) as bigint;
 
     const balanceInEnb = Number(balance) / Math.pow(10, 18);
+    console.log('✅ ENB balance fetched:', { rawBalance: balance.toString(), balanceInEnb });
     setEnbBalance(balanceInEnb);
   } catch (err) {
-    console.error('Error fetching ENB balance:', err);
+    console.error('❌ Error fetching ENB balance:', err);
     setEnbBalance(0);
   } finally {
     setEnbBalanceLoading(false);
+    console.log('🏁 ENB balance fetch finished');
   }
 }, [address, publicClient]); // publicClient is now stable
 
@@ -327,106 +342,65 @@ const fetchEnbBalance = useCallback(async () => {
   };
 
   const handleDailyClaim = async () => {
-    if (!address || !canClaim) return;
+    console.log('🎯 Starting daily claim process...');
+    console.log('📋 Claim data:', { address, canClaim });
+    
+    if (!address || !canClaim) {
+      console.log('❌ Cannot claim - missing address or claim not available');
+      return;
+    }
 
     setDailyClaimLoading(true);
+    console.log('✅ Proceeding with daily claim');
+    
     try {
-      const baseTxData = encodeFunctionData({
-        abi: ENB_MINI_APP_ABI,
-        functionName: 'dailyClaim',
-        args: [address]
-      });
-
-      let txHash: `0x${string}`;
-
-      try {
-        if (typeof window === 'undefined' || !window.ethereum) {
-          throw new Error('Ethereum provider not found');
-        }
-
-        // Step 1: Create a wallet client and get the account
-        const walletClient = createWalletClient({
-          chain: base,
-          transport: custom(window.ethereum),
-        });
-        const [account] = await walletClient.getAddresses();
-
-        // Step 2: Generate a referral tag for the user
-        const referralTag = getReferralTag({
-          user: account, // The user address making the transaction
-          consumer: '0xaF108Dd1aC530F1c4BdED13f43E336A9cec92B44', // Your Divvi Identifier
-        });
-
-        // Step 3: Send the transaction with referral tag
-        txHash = await walletClient.sendTransaction({
-          account,
-          to: ENB_MINI_APP_ADDRESS as `0x${string}`,
-          data: (baseTxData + referralTag) as `0x${string}`,
-        });
-
-        // Step 4: Get the chain ID of the chain that the transaction was sent to
-        const chainId = await walletClient.getChainId();
-
-        // Step 5: Report the transaction to Divvi
-        await submitReferral({
-          txHash,
-          chainId,
-        });
-
-        console.log('Divvi referral submitted for daily claim');
-      } catch (referralError) {
-        console.warn('Referral setup failed for daily claim:', referralError);
-        
-        // Fallback to regular transaction without referral
-      if (window.ethereum) {
-        const txParams = {
-          from: address as `0x${string}`,
-          to: ENB_MINI_APP_ADDRESS as `0x${string}`,
-            data: baseTxData,
-            gas: `0x${BigInt(100000).toString(16)}` as `0x${string}`
-        };
-
-        txHash = await (window.ethereum as EIP1193Provider).request({
-          method: 'eth_sendTransaction',
-          params: [txParams]
-        }) as `0x${string}`;
-      } else {
-        txHash = await writeContractAsync({
-          address: ENB_MINI_APP_ADDRESS,
-          abi: ENB_MINI_APP_ABI,
-          functionName: 'dailyClaim',
-          args: [address]
-        }) as `0x${string}`;
-        }
-      }
-
-      // Then submit to the API endpoint with transaction hash
-      const res = await fetch(`${API_BASE_URL}/api/daily-claim`, {
+      console.log('🔄 Using relayer for daily claim...');
+      
+      // Use the relayer endpoint instead of direct contract call
+      const res = await fetch(`${API_BASE_URL}/relay/daily-claim`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          walletAddress: address,
-          transactionHash: txHash 
-        }),
+        body: JSON.stringify({ user: address }),
       });
 
+      console.log('📥 Relayer response status:', res.status);
+      
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Daily claim failed');
+      console.log('📋 Relayer response data:', data);
+      
+      if (!res.ok) {
+        console.error('❌ Relayer request failed:', data);
+        throw new Error(data.error || 'Daily claim failed');
+      }
 
+      console.log('✅ Daily claim successful via relayer');
       setShowDailyClaimModal(true);
       await refreshProfile();
       await fetchEnbBalance(); // Refresh ENB balance after claim
     } catch (err) {
-      console.error(err);
+      console.error('❌ Daily claim failed:', err);
       alert('Daily claim failed. Please try again.');
     } finally {
       setDailyClaimLoading(false);
+      console.log('🏁 Daily claim process finished');
     }
   };
 
   const handleDailyClaimWarpcastShare = async () => {
+    // Calculate ENB amount based on membership level
+    const getEnbAmount = (level: string) => {
+      switch (level) {
+        case 'Based': return 10;
+        case 'Super Based': return 15;
+        case 'Legendary': return 20;
+        default: return 10;
+      }
+    };
+
+    const enbAmount = getEnbAmount(profile?.membershipLevel || 'Based');
+    
     await sdk.actions.composeCast({
-      text: `I just claimed my daily $ENB rewards! Join me and start earning now! ${profile?.invitationCode}`,
+      text: `I just claimed my daily ${enbAmount} $ENB rewards as a ${profile?.membershipLevel} member! Join me and start earning now! ${profile?.invitationCode}`,
       embeds: ["https://farcaster.xyz/~/mini-apps/launch?domain=enb-crushers.vercel.app"]
     });
   };
@@ -460,113 +434,21 @@ const fetchEnbBalance = useCallback(async () => {
     setInformationModal(true);   
   };
 
-  const handleClaimInvites = async () => {
-    if (!address || !profile?.invitationUsage || profile.invitationUsage.totalUses < 5) return;
-
-    setInviteClaimLoading(true);
-    try {
-      
-      const baseTxData = encodeFunctionData({
-        abi: ENB_MINI_APP_ABI,
-        functionName: 'claimForInvite',
-        args: [address, BigInt(25 * Math.pow(10, 18))] // 25 ENB in wei
-      });
-
-      let txHash: `0x${string}`;
-
-      try {
-        if (typeof window === 'undefined' || !window.ethereum) {
-          throw new Error('Ethereum provider not found');
-        }
-
-        // Step 1: Create a wallet client and get the account
-        const walletClient = createWalletClient({
-          chain: base,
-          transport: custom(window.ethereum),
-        });
-        const [account] = await walletClient.getAddresses();
-
-        // Step 2: Generate a referral tag for the user
-        const referralTag = getReferralTag({
-          user: account, // The user address making the transaction
-          consumer: '0xaF108Dd1aC530F1c4BdED13f43E336A9cec92B44', // Your Divvi Identifier
-        });
-
-        // Step 3: Send the transaction with referral tag
-        txHash = await walletClient.sendTransaction({
-          account,
-          to: ENB_MINI_APP_ADDRESS as `0x${string}`,
-          data: (baseTxData + referralTag) as `0x${string}`,
-        });
-
-        // Step 4: Get the chain ID of the chain that the transaction was sent to
-        const chainId = await walletClient.getChainId();
-
-        // Step 5: Report the transaction to Divvi
-        await submitReferral({
-          txHash,
-          chainId,
-        });
-
-        console.log('Divvi referral submitted for invite claim');
-      } catch (referralError) {
-        console.warn('Referral setup failed for invite claim:', referralError);
-        
-        // Fallback to regular transaction without referral
-        if (window.ethereum) {
-          const txParams = {
-            from: address as `0x${string}`,
-            to: ENB_MINI_APP_ADDRESS as `0x${string}`,
-            data: baseTxData,
-            gas: `0x${BigInt(100000).toString(16)}` as `0x${string}`
-          };
-
-          txHash = await (window.ethereum as EIP1193Provider).request({
-            method: 'eth_sendTransaction',
-            params: [txParams]
-          }) as `0x${string}`;
-        } else {
-          txHash = await writeContractAsync({
-            address: ENB_MINI_APP_ADDRESS,
-            abi: ENB_MINI_APP_ABI,
-            functionName: 'claimForInvite',
-            args: [address, BigInt(25 * Math.pow(10, 18))]
-          }) as `0x${string}`;
-        }
-      }
-
-      // Refresh profile and ENB balance after successful claim
-      await refreshProfile();
-      await fetchEnbBalance();
-      
-      // Show success message
-      alert('Successfully claimed 25 ENB for your invites!');
-    } catch (err) {
-      console.error('Invite claim failed:', err);
-      
-      // Handle specific error types
-      const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred';
-      
-      if (errorMessage.includes('insufficient funds') || errorMessage.includes('gas')) {
-        alert('Insufficient ETH balance to cover gas fees. Please add some ETH to your wallet and try again.');
-      } else if (errorMessage.includes('user rejected') || errorMessage.includes('User rejected')) {
-        alert('Transaction was cancelled by user.');
-      } else if (errorMessage.includes('execution reverted')) {
-        alert('Transaction failed. You may not be eligible to claim invites or the contract requirements are not met.');
-      } else {
-        alert(`Invite claim failed: ${errorMessage}`);
-      }
-    } finally {
-      setInviteClaimLoading(false);
-    }
-  };
-
   const handleUpgrade = async () => {
-    if (!address || !profile) return;
+    console.log('🚀 Starting upgrade process...');
+    console.log('📋 Upgrade data:', { address, profile: profile ? { membershipLevel: profile.membershipLevel, consecutiveDays: profile.consecutiveDays } : null });
+    
+    if (!address || !profile) {
+      console.log('❌ Cannot upgrade - missing address or profile');
+      return;
+    }
 
     // Check consecutive days requirement
     const requiredDays = profile.membershipLevel === 'Based' ? 14 : 28;
+    console.log('📊 Upgrade requirements:', { currentLevel: profile.membershipLevel, requiredDays, currentDays: profile.consecutiveDays });
+    
     if (profile.consecutiveDays < requiredDays) {
+      console.log('❌ Insufficient consecutive days for upgrade');
       setUpgradeError(`You need ${requiredDays} consecutive days of daily claims to upgrade. You currently have ${profile.consecutiveDays} days.`);
       return;
     }
@@ -576,104 +458,48 @@ const fetchEnbBalance = useCallback(async () => {
       case 'Based': targetLevel = 1; break; // SuperBased = 1
       case 'Super Based': targetLevel = 2; break; // Legendary = 2
       default:
+        console.log('❌ Already at highest level');
         alert('You are already at the highest level!');
         return;
     }
 
+    console.log('✅ Upgrade requirements met, target level:', targetLevel);
     setUpgradeLoading(true);
     setUpgradeError(null);
+    
     try {
+      console.log('🔄 Using relayer for upgrade...');
       
-      const baseTxData = encodeFunctionData({
-        abi: ENB_MINI_APP_ABI,
-        functionName: 'upgradeMembership',
-        args: [address, targetLevel]
-      });
-
-      let txHash: `0x${string}`;
-
-      try {
-        if (typeof window === 'undefined' || !window.ethereum) {
-          throw new Error('Ethereum provider not found');
-        }
-
-        // Step 1: Create a wallet client and get the account
-        const walletClient = createWalletClient({
-          chain: base,
-          transport: custom(window.ethereum),
-        });
-        const [account] = await walletClient.getAddresses();
-
-        // Step 2: Generate a referral tag for the user
-        const referralTag = getReferralTag({
-          user: account, // The user address making the transaction
-          consumer: '0xaF108Dd1aC530F1c4BdED13f43E336A9cec92B44', // Your Divvi Identifier
-        });
-
-        // Step 3: Send the transaction with referral tag
-        txHash = await walletClient.sendTransaction({
-          account,
-          to: ENB_MINI_APP_ADDRESS as `0x${string}`,
-          data: (baseTxData + referralTag) as `0x${string}`,
-        });
-
-        // Step 4: Get the chain ID of the chain that the transaction was sent to
-        const chainId = await walletClient.getChainId();
-
-        // Step 5: Report the transaction to Divvi
-        await submitReferral({
-          txHash,
-          chainId,
-        });
-
-        console.log('Divvi referral submitted for upgrade');
-      } catch (referralError) {
-        console.warn('Referral setup failed for upgrade:', referralError);
-        
-        // Fallback to regular transaction without referral
-      if (window.ethereum) {
-        const txParams = {
-          from: address as `0x${string}`,
-          to: ENB_MINI_APP_ADDRESS as `0x${string}`,
-            data: baseTxData,
-            gas: `0x${BigInt(100000).toString(16)}` as `0x${string}`
-        };
-
-        txHash = await (window.ethereum as EIP1193Provider).request({
-          method: 'eth_sendTransaction',
-          params: [txParams]
-        }) as `0x${string}`;
-      } else {
-        txHash = await writeContractAsync({
-          address: ENB_MINI_APP_ADDRESS,
-          abi: ENB_MINI_APP_ABI,
-          functionName: 'upgradeMembership',
-          args: [address, targetLevel]
-        }) as `0x${string}`;
-        }
-      }
-
-      const res = await fetch(`${API_BASE_URL}/api/update-membership`, {
+      // Use the relayer endpoint instead of direct contract call
+      const res = await fetch(`${API_BASE_URL}/relay/upgrade-membership`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          walletAddress: address,
-          membershipLevel: targetLevel === 1 ? 'Super Based' : 'Legendary',
-          transactionHash: txHash,
+        body: JSON.stringify({ 
+          user: address, 
+          targetLevel: targetLevel 
         }),
       });
 
+      console.log('📥 Relayer response status:', res.status);
+      
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Upgrade failed');
+      console.log('📋 Relayer response data:', data);
+      
+      if (!res.ok) {
+        console.error('❌ Relayer request failed:', data);
+        throw new Error(data.error || 'Upgrade failed');
+      }
 
+      console.log('✅ Upgrade successful via relayer');
       setShowUpgradeModal(true);
       await refreshProfile();
       await fetchEnbBalance(); // Refresh ENB balance after upgrade
     } catch (err) {
-      console.error(err);
+      console.error('❌ Upgrade failed:', err);
       
       // Handle specific error types
       const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred';
+      console.log('🔍 Error analysis:', errorMessage);
       
       if (errorMessage.includes('insufficient funds') || errorMessage.includes('gas')) {
         setUpgradeError('Insufficient ETH balance to cover gas fees. Please add some ETH to your wallet and try again.');
@@ -690,6 +516,7 @@ const fetchEnbBalance = useCallback(async () => {
       }
     } finally {
       setUpgradeLoading(false);
+      console.log('🏁 Upgrade process finished');
     }
   };
 
@@ -1032,22 +859,6 @@ const fetchEnbBalance = useCallback(async () => {
                   {profile.invitationUsage.totalUses} of {profile.invitationUsage.maxUses} uses
                 </div>
               </div>
-              <button
-                disabled={!profile.invitationUsage || profile.invitationUsage.totalUses < 5}
-                onClick={handleClaimInvites}
-                className={`w-full px-4 py-2 rounded-lg font-medium transition-colors ${
-                  profile.invitationUsage && profile.invitationUsage.totalUses >= 5
-                    ? 'bg-green-600 text-white hover:bg-green-700'
-                    : 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                } disabled:opacity-60`}
-              >
-                {inviteClaimLoading 
-                  ? 'Claiming...' 
-                  : profile.invitationUsage && profile.invitationUsage.totalUses >= 5
-                  ? 'Claim 25 ENB for your invites'
-                  : `Need ${5 - (profile.invitationUsage?.totalUses || 0)} more invites (${profile.invitationUsage?.totalUses || 0}/5)`
-                }
-              </button>
             </div>
           </div>
         )}
@@ -1088,16 +899,20 @@ const fetchEnbBalance = useCallback(async () => {
             )}
 
             <button
-              disabled={dailyClaimLoading || !profile.isActivated || !canClaim}
+              disabled={dailyClaimLoading || !profile?.isActivated || !canClaim || !address}
               onClick={handleDailyClaim}
               className={`w-full px-4 py-2 rounded-lg font-medium transition-colors ${
-                canClaim && profile.isActivated
+                canClaim && profile?.isActivated && address
                   ? 'bg-blue-600 text-white hover:bg-blue-700'
                   : 'bg-gray-300 text-gray-500 cursor-not-allowed'
               } disabled:opacity-60`}
             >
               {dailyClaimLoading 
                 ? 'Claiming...' 
+                : !address
+                ? 'Connect Wallet'
+                : !profile?.isActivated
+                ? 'Account Not Activated'
                 : canClaim 
                 ? 'Claim Daily Rewards' 
                 : 'Claim Unavailable'

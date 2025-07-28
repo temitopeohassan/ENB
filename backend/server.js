@@ -1,38 +1,65 @@
-// server.js
 import express from 'express';
 import dotenv from 'dotenv';
-import admin from 'firebase-admin';
 import cors from 'cors';
-import { initializeApp, cert } from 'firebase-admin/app';
+import admin from 'firebase-admin';
+import { initializeApp, cert, getApps } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
+import { ethers } from 'ethers';
 import crypto from 'crypto';
+import { readFileSync } from 'fs';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
 
-// Load env vars from .env file
+// Get current file directory for ES modules
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+// Load JSON file for ES modules
+const enbMiniAppPath = join(__dirname, 'abis', 'EnbMiniApp.json');
+const enbMiniApp = JSON.parse(readFileSync(enbMiniAppPath, 'utf8'));
+const enbMiniAppAbi = enbMiniApp.abi;
+
+// Load environment variables from .env
 dotenv.config();
 
-// Firebase Admin SDK initialization
+// === Firebase Initialization ===
 if (!process.env.FIREBASE_SERVICE_ACCOUNT_JSON) {
-  console.error('FATAL ERROR: FIREBASE_SERVICE_ACCOUNT_JSON is not defined. Please check your .env file or environment variables.');
+  console.error('❌ FIREBASE_SERVICE_ACCOUNT_JSON not found. Exiting.');
   process.exit(1);
 }
+
 const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_JSON);
 
-initializeApp({
-  credential: cert(serviceAccount)
-});
+// Only initialize Firebase if no app has been initialized
+if (!getApps().length) {
+  initializeApp({
+    credential: cert(serviceAccount),
+  });
+}
 
 const db = getFirestore();
 
+// === Blockchain Setup ===
+if (!process.env.RPC_URL || !process.env.PRIVATE_KEY || !process.env.CONTRACT_ADDRESS) {
+  console.error('❌ Missing RPC_URL, PRIVATE_KEY, or CONTRACT_ADDRESS in .env');
+  process.exit(1);
+}
+
+const provider = new ethers.JsonRpcProvider(process.env.RPC_URL);
+const relayerWallet = new ethers.Wallet(process.env.PRIVATE_KEY, provider);
+const contract = new ethers.Contract(process.env.CONTRACT_ADDRESS, enbMiniAppAbi, relayerWallet);
+
+// === Express Setup ===
 const app = express();
 const PORT = process.env.PORT || 8080;
 
-app.use(cors());
 app.use(express.json());
 
-// Configure CORS with specific options
 app.use(cors({
   origin: [
     'http://localhost:3000',
+    'http://localhost:3001',
+    'https://test-flight-six.vercel.app',
     'https://enb-crushers.vercel.app'
   ],
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
@@ -42,23 +69,17 @@ app.use(cors({
   maxAge: 86400
 }));
 
-// Function to generate random invitation code
-const generateInvitationCode = () => {
-  // Generate a 8-character alphanumeric code
-  return crypto.randomBytes(4).toString('hex').toUpperCase();
-};
+// === Helper Functions ===
+const generateInvitationCode = () => crypto.randomBytes(4).toString('hex').toUpperCase();
 
-// Function to check if invitation code already exists
 const isInvitationCodeUnique = async (code) => {
   const snapshot = await db.collection('accounts')
     .where('invitationCode', '==', code)
     .limit(1)
     .get();
-  
   return snapshot.empty;
 };
 
-// Function to generate unique invitation code
 const generateUniqueInvitationCode = async () => {
   let code;
   let attempts = 0;
@@ -67,18 +88,27 @@ const generateUniqueInvitationCode = async () => {
   do {
     code = generateInvitationCode();
     attempts++;
-    
     if (attempts > maxAttempts) {
-      throw new Error('Failed to generate unique invitation code after maximum attempts');
+      throw new Error('Failed to generate unique invitation code after 10 attempts');
     }
   } while (!(await isInvitationCodeUnique(code)));
 
   return code;
 };
 
+// === Routes ===
 // Basic route
 app.get('/', (req, res) => {
   res.send('ENB API is running.');
+});
+
+// Health check endpoint
+app.get('/health', (req, res) => {
+  res.json({ 
+    status: 'ok', 
+    timestamp: new Date().toISOString(),
+    environment: process.env.NODE_ENV || 'development'
+  });
 });
 
 // Create user account
@@ -270,11 +300,14 @@ app.post('/api/activate-account', async (req, res) => {
 
 app.get('/api/profile/:walletAddress', async (req, res) => {
   const walletAddress = req.params.walletAddress;
+  
+  console.log('📥 Incoming /api/profile call for wallet:', walletAddress);
 
   try {
     const doc = await db.collection('accounts').doc(walletAddress).get();
 
     if (!doc.exists) {
+      console.log('❌ Account not found for wallet:', walletAddress);
       return res.status(404).json({ error: 'Account not found' });
     }
 
@@ -307,13 +340,111 @@ app.get('/api/profile/:walletAddress', async (req, res) => {
       joinDate: data.createdAt && data.createdAt.toDate ? data.createdAt.toDate().toISOString() : (data.createdAt ? data.createdAt.toISOString() : null)
     };
 
+    console.log('✅ Profile data retrieved for wallet:', walletAddress, { isActivated: data.isActivated, membershipLevel: data.membershipLevel });
     return res.status(200).json(profileData);
   } catch (error) {
-    console.error('Error fetching profile:', error);
+    console.error('❌ Error fetching profile for wallet:', walletAddress, error);
     return res.status(500).json({ error: 'Failed to fetch profile' });
   }
 });
 
+
+// Updated: Daily claim with smart contract interaction via trusted relayer
+app.post('/api/daily-claim', async (req, res) => {
+  const { walletAddress } = req.body;
+
+  if (!walletAddress || !ethers.isAddress(walletAddress)) {
+    return res.status(400).json({ error: 'Missing or invalid wallet address' });
+  }
+
+  try {
+    const accountRef = db.collection('accounts').doc(walletAddress);
+    const accountDoc = await accountRef.get();
+
+    if (!accountDoc.exists) {
+      return res.status(404).json({ error: 'Account not found' });
+    }
+
+    const accountData = accountDoc.data();
+
+    if (!accountData.isActivated) {
+      return res.status(400).json({ error: 'Account is not activated' });
+    }
+
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+    // Check if user already claimed today
+    if (accountData.lastDailyClaimTime) {
+      const lastClaim = accountData.lastDailyClaimTime.toDate();
+      const lastClaimDate = new Date(lastClaim.getFullYear(), lastClaim.getMonth(), lastClaim.getDate());
+
+      if (lastClaimDate.getTime() === today.getTime()) {
+        return res.status(400).json({ error: 'Already claimed today' });
+      }
+    }
+
+    // Calculate streak & base reward
+    let consecutiveDays = 1;
+    let enbReward = 10;
+
+    if (accountData.lastDailyClaimTime) {
+      const lastClaim = accountData.lastDailyClaimTime.toDate();
+      const yesterday = new Date(today.getTime() - 24 * 60 * 60 * 1000);
+      const lastClaimDate = new Date(lastClaim.getFullYear(), lastClaim.getMonth(), lastClaim.getDate());
+
+      if (lastClaimDate.getTime() === yesterday.getTime()) {
+        consecutiveDays = (accountData.consecutiveDays || 0) + 1;
+        const multiplier = Math.min(consecutiveDays, 5);
+        enbReward = 10 * multiplier;
+      }
+    }
+
+    // Apply membership multiplier
+    const membershipMultiplier = {
+      'Based': 1,
+      'Super Based': 1.5,
+      'Legendary': 2
+    };
+
+    const finalReward = Math.floor(enbReward * (membershipMultiplier[accountData.membershipLevel] || 1));
+
+    // === Trusted Relayer executes smart contract call ===
+    const tx = await contract.dailyClaim(walletAddress);
+    await tx.wait();
+
+    // Update Firestore
+    await accountRef.update({
+      lastDailyClaimTime: now,
+      consecutiveDays,
+      enbBalance: (accountData.enbBalance || 0) + finalReward,
+      totalEarned: (accountData.totalEarned || 0) + finalReward,
+      lastTransactionHash: tx.hash
+    });
+
+    // Optional: Log claim
+    await db.collection("claims").doc(walletAddress).set({
+      claimedAt: now.toISOString(),
+      reward: finalReward,
+      consecutiveDays,
+      txHash: tx.hash,
+    });
+
+    return res.status(200).json({
+      message: 'Daily claim successful via relayer',
+      reward: finalReward,
+      txHash: tx.hash,
+      newBalance: (accountData.enbBalance || 0) + finalReward,
+      consecutiveDays
+    });
+
+  } catch (error) {
+    console.error('Daily claim error:', error);
+    return res.status(500).json({ error: 'Failed to process daily claim' });
+  }
+});
+
+// Get daily claim status
 // Daily claim functionality
 app.post('/api/daily-claim', async (req, res) => {
   const { walletAddress, transactionHash } = req.body;
@@ -338,12 +469,12 @@ app.post('/api/daily-claim', async (req, res) => {
 
     const now = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    
+
     // Check if user already claimed today
     if (accountData.lastDailyClaimTime) {
       const lastClaim = accountData.lastDailyClaimTime.toDate();
       const lastClaimDate = new Date(lastClaim.getFullYear(), lastClaim.getMonth(), lastClaim.getDate());
-      
+
       if (lastClaimDate.getTime() === today.getTime()) {
         return res.status(400).json({ error: 'Already claimed today' });
       }
@@ -360,7 +491,6 @@ app.post('/api/daily-claim', async (req, res) => {
 
       if (lastClaimDate.getTime() === yesterday.getTime()) {
         consecutiveDays = (accountData.consecutiveDays || 0) + 1;
-        // Bonus for consecutive days (max 5x multiplier)
         const multiplier = Math.min(consecutiveDays, 5);
         enbReward = 10 * multiplier;
       }
@@ -375,7 +505,7 @@ app.post('/api/daily-claim', async (req, res) => {
 
     const finalReward = Math.floor(enbReward * (membershipMultiplier[accountData.membershipLevel] || 1));
 
-    // Update account
+    // Update account with claim info
     await accountRef.update({
       lastDailyClaimTime: now,
       consecutiveDays: consecutiveDays,
@@ -397,48 +527,9 @@ app.post('/api/daily-claim', async (req, res) => {
   }
 });
 
-// Get daily claim status
-app.get('/api/daily-claim-status/:walletAddress', async (req, res) => {
-  const walletAddress = req.params.walletAddress;
-
-  try {
-    const accountDoc = await db.collection('accounts').doc(walletAddress).get();
-
-    if (!accountDoc.exists) {
-      return res.status(404).json({ error: 'Account not found' });
-    }
-
-    const accountData = accountDoc.data();
-    const now = new Date();
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    
-    let canClaim = true;
-    let lastClaimToday = false;
-
-    if (accountData.lastDailyClaimTime) {
-      const lastClaim = accountData.lastDailyClaimTime.toDate();
-      const lastClaimDate = new Date(lastClaim.getFullYear(), lastClaim.getMonth(), lastClaim.getDate());
-      
-      if (lastClaimDate.getTime() === today.getTime()) {
-        canClaim = false;
-        lastClaimToday = true;
-      }
-    }
-
-    return res.status(200).json({
-      canClaim,
-      lastClaimToday,
-      consecutiveDays: accountData.consecutiveDays || 0,
-      lastDailyClaimTime: accountData.lastDailyClaimTime || null
-    });
-
-  } catch (error) {
-    console.error('Error fetching daily claim status:', error);
-    return res.status(500).json({ error: 'Failed to fetch daily claim status' });
-  }
-});
 
 // Update ENB balance (for transactions)
+
 app.post('/api/update-balance', async (req, res) => {
   const { walletAddress, amount, type, description } = req.body;
 
@@ -775,19 +866,26 @@ app.get('/api/users', async (req, res) => {
   }
 });
 
-// Update membership level
+// Updated: Membership upgrade via smart contract relayer
 app.post('/api/update-membership', async (req, res) => {
-  const { walletAddress, membershipLevel, transactionHash } = req.body;
+  const { walletAddress, membershipLevel } = req.body;
 
-  if (!walletAddress || !membershipLevel || !transactionHash) {
-    return res.status(400).json({ error: 'Missing required fields' });
+  if (!walletAddress || !ethers.isAddress(walletAddress) || !membershipLevel) {
+    return res.status(400).json({ error: 'Missing or invalid input fields' });
   }
 
   // Validate membership level
-  const validLevels = ['Based', 'Super Based', 'Legendary'];
-  if (!validLevels.includes(membershipLevel)) {
+  const levelMapping = {
+    'Based': 0,
+    'Super Based': 1,
+    'Legendary': 2
+  };
+
+  if (!(membershipLevel in levelMapping)) {
     return res.status(400).json({ error: 'Invalid membership level' });
   }
+
+  const targetLevel = levelMapping[membershipLevel];
 
   try {
     const accountRef = db.collection('accounts').doc(walletAddress);
@@ -803,23 +901,36 @@ app.post('/api/update-membership', async (req, res) => {
       return res.status(400).json({ error: 'Account is not activated' });
     }
 
-    // Update membership level
+    // Call upgradeMembership onchain using relayer
+    const tx = await contract.upgradeMembership(walletAddress, targetLevel);
+    await tx.wait();
+
+    // Update Firestore
     await accountRef.update({
       membershipLevel: membershipLevel,
       lastUpgradeAt: new Date(),
-      upgradeTransactionHash: transactionHash
+      upgradeTransactionHash: tx.hash
+    });
+
+    // Optional log
+    await db.collection("upgrades").doc(walletAddress).set({
+      upgradedAt: new Date().toISOString(),
+      level: targetLevel,
+      txHash: tx.hash
     });
 
     return res.status(200).json({
-      message: 'Membership level updated successfully',
-      newLevel: membershipLevel
+      message: 'Membership level upgraded via relayer',
+      newLevel: membershipLevel,
+      txHash: tx.hash
     });
 
   } catch (error) {
-    console.error('Error updating membership level:', error);
-    return res.status(500).json({ error: 'Failed to update membership level' });
+    console.error('Error upgrading membership level:', error);
+    return res.status(500).json({ error: 'Failed to upgrade membership level' });
   }
 });
+
 
 // Get invitation code usage count
 app.get('/api/invitation-usage/:invitationCode', async (req, res) => {
@@ -877,7 +988,64 @@ app.get('/api/invitation-usage/:invitationCode', async (req, res) => {
   }
 });
 
-// Server start
+
+// === Trusted Relayer Routes ===
+
+// Relayed daily claim via smart contract
+app.post('/relay/daily-claim', async (req, res) => {
+  const { user } = req.body;
+
+  if (!user || !ethers.isAddress(user)) {
+    return res.status(400).json({ error: 'Invalid user address' });
+  }
+
+  try {
+    const tx = await contract.dailyClaim(user);
+    await tx.wait();
+
+    await db.collection("claims").doc(user).set({
+      lastClaimed: new Date().toISOString(),
+      txHash: tx.hash,
+    });
+
+    res.json({ success: true, txHash: tx.hash });
+  } catch (err) {
+    console.error("Relay daily claim error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Relayed membership upgrade via smart contract
+app.post('/relay/upgrade-membership', async (req, res) => {
+  const { user, targetLevel } = req.body;
+
+  if (!user || !ethers.isAddress(user)) {
+    return res.status(400).json({ error: 'Invalid user address' });
+  }
+
+  if (![1, 2].includes(targetLevel)) {
+    return res.status(400).json({ error: 'Invalid membership level (must be 1 or 2)' });
+  }
+
+  try {
+    const tx = await contract.upgradeMembership(user, targetLevel);
+    await tx.wait();
+
+    await db.collection("upgrades").doc(user).set({
+      upgradedAt: new Date().toISOString(),
+      level: targetLevel,
+      txHash: tx.hash,
+    });
+
+    res.json({ success: true, txHash: tx.hash });
+  } catch (err) {
+    console.error("Relay upgrade error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+
+// === Start Server ===
 app.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
+  console.log(`🚀 Server is running on http://localhost:${PORT}`);
 });
