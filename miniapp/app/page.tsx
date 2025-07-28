@@ -14,7 +14,7 @@ import { sdk } from "@farcaster/miniapp-sdk";
 export default function App() {
   const { isConnected, address } = useAccount();
   const { connect } = useConnect();
-  const [activeTab, setActiveTabAction] = useState("maintenance");
+  const [activeTab, setActiveTabAction] = useState("account");
   const [miniAppAdded, setMiniAppAdded] = useState(false);
   const frameConnector = useMemo(() => farcasterFrame(), []);
 
@@ -90,6 +90,35 @@ export default function App() {
 
   const truncateAddress = (addr: string) => `${addr.slice(0, 6)}...${addr.slice(-4)}`;
 
+  // Tab navigation component
+  const TabNavigation = () => {
+    if (!isConnected) return null;
+
+    const tabs = [
+      { id: "account", label: "Account", icon: "user" },
+      { id: "create", label: "Create", icon: "plus" }
+    ];
+
+    return (
+      <div className="flex space-x-1 mb-6 bg-[var(--app-gray)] p-1 rounded-lg">
+        {tabs.map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTabAction(tab.id)}
+            className={`flex-1 flex items-center justify-center space-x-2 px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+              activeTab === tab.id
+                ? "bg-[var(--app-background)] text-[var(--app-foreground)] shadow-sm"
+                : "text-[var(--app-foreground-muted)] hover:text-[var(--app-foreground)]"
+            }`}
+          >
+            <Icon name={tab.icon as "user" | "plus"} size="sm" />
+            <span>{tab.label}</span>
+          </button>
+        ))}
+      </div>
+    );
+  };
+
   return (
     <div className="flex flex-col min-h-screen font-sans text-[var(--app-foreground)] mini-app-theme from-[var(--app-background)] to-[var(--app-gray)]">
       <header className="fixed top-0 left-0 right-0 bg-[var(--app-background)] border-b border-[var(--app-gray)] z-50">
@@ -119,6 +148,7 @@ export default function App() {
 
       <div className="w-full max-w-md mx-auto px-4 py-3 pt-20">
         <main className="flex-1">
+          <TabNavigation />
           {activeTab === "account" && <Account setActiveTabAction={setActiveTabAction} />}
           {activeTab === "create" && <Create setActiveTabAction={setActiveTabAction} />}
           {activeTab === "maintenance" && <Maintenance />}

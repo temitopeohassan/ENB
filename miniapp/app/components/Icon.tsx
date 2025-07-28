@@ -1,7 +1,7 @@
 import React from "react";
 
 type IconProps = {
-  name: "heart" | "star" | "check" | "plus" | "arrow-right";
+  name: "heart" | "star" | "check" | "plus" | "arrow-right" | "user";
   size?: "sm" | "md" | "lg";
   className?: string;
 };
@@ -31,6 +31,12 @@ export function Icon({ name, size = "md", className = "" }: IconProps) {
       <>
         <line x1="5" y1="12" x2="19" y2="12" />
         <polyline points="12 5 19 12 12 19" />
+      </>
+    ),
+    user: (
+      <>
+        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+        <circle cx="12" cy="7" r="4" />
       </>
     ),
   };
