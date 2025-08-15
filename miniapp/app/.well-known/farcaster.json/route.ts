@@ -1,22 +1,37 @@
-export async function GET() {
-  const URL = process.env.NEXT_PUBLIC_URL;
+import { NextResponse } from 'next/server';
 
-  return Response.json({
+export async function GET() {
+  const config = {
     accountAssociation: {
-      header: process.env.FARCASTER_HEADER,
-      payload: process.env.FARCASTER_PAYLOAD,
-      signature: process.env.FARCASTER_SIGNATURE,
+      header:
+        'eyJmaWQiOjczODU3NCwidHlwZSI6ImN1c3RvZHkiLCJrZXkiOiIweDZkNjQ4NDVhOUExYTEwN0Y5OTk3RTQ3N2FjMTk5NTI2ZEViZTlDZTMifQ',
+      payload: 'eyJkb21haW4iOiJlbmItY3J1c2hlcnMudmVyY2VsLmFwcCJ9',
+      signature:
+        'MHg0YzZlNWMxYTVjOGExNjgzY2VjODY0Y2Y3MDQ2NGYxZDczZjdjNGExMjMzOWUyOTQxMTRlOTQ4M2NlMDgwZGJlNGJjNzY3ZGM4YWZlZTVlOThmZWYwMWViYmQ2MTJkYTdlMjZlMTQ4MzA1M2JlY2Y3ZDdmYWEyNDU4NDBlNzJhMDFj',
     },
     frame: {
-      version: process.env.NEXT_PUBLIC_VERSION,
-      name: process.env.NEXT_PUBLIC_ONCHAINKIT_PROJECT_NAME,
-      homeUrl: URL,
-      iconUrl: process.env.NEXT_PUBLIC_ICON_URL,
-      imageUrl: process.env.NEXT_PUBLIC_IMAGE_URL,
-      buttonTitle: `Launch ${process.env.NEXT_PUBLIC_ONCHAINKIT_PROJECT_NAME}`,
-      splashImageUrl: process.env.NEXT_PUBLIC_SPLASH_IMAGE_URL,
-      splashBackgroundColor: `#${process.env.NEXT_PUBLIC_SPLASH_BACKGROUND_COLOR}`,
-      webhookUrl: `${URL}/api/webhook`,
+      version: '1',
+      name: 'ENB Mining',
+      iconUrl: 'https://enb-crushers.vercel.app/icon.png',
+      splashImageUrl: 'https://enb-crushers.vercel.app/splash.png',
+      splashBackgroundColor: '#A93445',
+      homeUrl: 'https://enb-crushers.vercel.app/',
+      heroImageUrl:
+        'https://enb-crushers.vercel.app/image.png',
+      webhookUrl: 'https://enb-crushers.vercel.app/api/webhook',
+      subtitle: 'Fast, Simple, Onchain',
+      description: 'earn ENB daily on Farcaster',
+      primaryCategory: 'productivity',
+      tags: ['bounties', 'tasks', 'incentives', 'blockchain'],
+      tagline: 'Fast, Simple, Onchain',
+      ogTitle: 'enb',
+      ogDescription: 'earn ENB daily on Farcaster',
+      ogImageUrl:
+        'https://enb-crushers.vercel.app/og-image.png',
     },
-  });
+  };
+
+  return NextResponse.json(config);
 }
+
+export const runtime = 'edge';
