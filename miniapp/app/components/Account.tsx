@@ -87,6 +87,8 @@ export const Account: React.FC<AccountProps> = ({ setActiveTabAction }) => {
   const [loading, setLoading] = useState(true);
   const [dailyClaimLoading, setDailyClaimLoading] = useState(false);
   const [upgradeLoading, setUpgradeLoading] = useState(false);
+  const [profileRefreshLoading, setProfileRefreshLoading] = useState(false);
+  const [profileRefreshSuccess, setProfileRefreshSuccess] = useState(false);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [enbBalance, setEnbBalance] = useState<number>(0);
@@ -588,16 +590,28 @@ const { context } = useFrame()
   const refreshProfile = async () => {
     if (!address) return;
     
+    setProfileRefreshLoading(true);
+    setProfileRefreshSuccess(false);
     try {
+      console.log('🔄 Refreshing profile data...');
       const res = await fetch(`${API_BASE_URL}/api/profile/${address}`);
       if (res.ok) {
         const updated = await res.json();
+        console.log('✅ Profile refreshed:', updated);
         setProfile(updated);
         // Also refresh claim status when profile is refreshed
         await updateClaimStatus();
+        console.log('✅ All profile data refreshed successfully');
+        setProfileRefreshSuccess(true);
+        // Hide success message after 3 seconds
+        setTimeout(() => setProfileRefreshSuccess(false), 3000);
+      } else {
+        console.error('❌ Failed to refresh profile:', res.status, res.statusText);
       }
     } catch (err) {
-      console.error('Error refreshing profile:', err);
+      console.error('❌ Error refreshing profile:', err);
+    } finally {
+      setProfileRefreshLoading(false);
     }
   };
 
@@ -1042,8 +1056,26 @@ const { context } = useFrame()
             </div>
             {profile.invitationCode && (
               <div>
-                <label className="text-sm font-medium text-gray-600">Activation Code</label>
-                <p className="text-gray-800 font-mono">{profile.invitationCode}</p>
+                <div className="flex justify-between items-center mb-2">
+                  <label className="text-sm font-medium text-gray-600">Activation Code</label>
+                  <button
+                    onClick={refreshProfile}
+                    disabled={profileRefreshLoading}
+                    className="px-2 py-1 text-xs bg-blue-100 text-blue-600 rounded hover:bg-blue-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    title="Refresh invitation code data"
+                  >
+                    {profileRefreshLoading ? '⏳' : '🔄'} Refresh
+                  </button>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <p className="text-gray-800 font-mono">{profile.invitationCode}</p>
+                  {profileRefreshLoading && (
+                    <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-600"></div>
+                  )}
+                  {profileRefreshSuccess && (
+                    <div className="text-green-500 text-sm">✓</div>
+                  )}
+                </div>
               </div>
             )}
             {profile.invitationUsage && (
@@ -1140,33 +1172,14 @@ const { context } = useFrame()
         {/* Invitation Statistics */}
         {profile.invitationUsage && (
           <div id="invitation-stats-section" className="bg-white p-6 rounded-lg shadow-md border">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-semibold text-gray-800">Invitation Statistics</h2>
-              <button
-                onClick={refreshProfile}
-                className="px-3 py-1 text-sm bg-blue-100 text-blue-600 rounded-lg hover:bg-blue-200 transition-colors"
-                title="Refresh invitation usage data"
-              >
-                🔄 Refresh
-              </button>
-            </div>
+            <h2 className="text-xl font-semibold mb-4 text-gray-800">Invitation Statistics</h2>
             <div className="space-y-4">
-              <div className="grid grid-cols-3 gap-4 text-center">
-                <div className="bg-blue-50 p-3 rounded-lg">
-                  <div className="text-2xl font-bold text-blue-600">{profile.invitationUsage.totalUses}</div>
-                  <div className="text-sm text-gray-600">Total Users</div>
-                </div>
-                <div className="bg-green-50 p-3 rounded-lg">
-                  <div className="text-2xl font-bold text-green-600">{profile.invitationUsage.remainingUses}</div>
-                  <div className="text-sm text-gray-600">Remaining</div>
-                </div>
-                <div className="bg-gray-50 p-3 rounded-lg">
-                  <div className="text-2xl font-bold text-gray-800">{profile.invitationUsage.maxUses}</div>
-                  <div className="text-sm text-gray-600">Max Uses</div>
-                </div>
+              <div className="text-center">
+                <div className="text-2xl font-bold text-blue-600 mb-2">{profile.invitationUsage.totalUses}</div>
+                <div className="text-sm text-gray-600">Total Users</div>
               </div>
               <div className="bg-blue-50 p-3 rounded-lg">
-                <div className="text-sm text-gray-600 mb-1">Progress</div>
+                <div className="text-sm text-gray-600 mb-1">Invite Rewards Progress</div>
                 <div className="w-full bg-gray-200 rounded-full h-2">
                   <div 
                     className="bg-blue-600 h-2 rounded-full transition-all duration-300"
