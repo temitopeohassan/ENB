@@ -483,6 +483,14 @@ const { context } = useFrame()
     return () => clearInterval(syncInterval);
   }, [address, updateClaimStatus]);
 
+  // Refresh profile data when component becomes visible (e.g., after navigation)
+  useEffect(() => {
+    if (address && profile) {
+      console.log('🔄 Refreshing profile data to ensure invite usage is up to date...');
+      refreshProfile();
+    }
+  }, [address, profile?.walletAddress]); // Refresh when address changes or when profile is loaded
+
   const checkAccountStatus = useCallback(async () => {
     if (!address) {
       setError('No wallet connected');
@@ -638,7 +646,9 @@ const { context } = useFrame()
       }
 
       console.log('✅ Daily claim successful:', data);
-      alert('Daily claim successful!');
+      
+      // Show the success modal
+      setShowDailyClaimModal(true);
       
       // Immediately update claim status from backend after successful claim
       console.log('🔄 Refreshing claim status after successful claim...');
@@ -703,7 +713,7 @@ const { context } = useFrame()
     });
   };
 
-  const url= "https://farcaster.xyz/kokocodes/0xfb0d3293";
+  const url= "https://wallet.coinbase.com/post/0x942862cba4a0f04ebe119bafd494eba55bc7164f";
 
   const handleBuyENB = async () => {
     await sdk.actions.openUrl(url)
@@ -1130,7 +1140,16 @@ const { context } = useFrame()
         {/* Invitation Statistics */}
         {profile.invitationUsage && (
           <div id="invitation-stats-section" className="bg-white p-6 rounded-lg shadow-md border">
-            <h2 className="text-xl font-semibold mb-4 text-gray-800">Invitation Statistics</h2>
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-semibold text-gray-800">Invitation Statistics</h2>
+              <button
+                onClick={refreshProfile}
+                className="px-3 py-1 text-sm bg-blue-100 text-blue-600 rounded-lg hover:bg-blue-200 transition-colors"
+                title="Refresh invitation usage data"
+              >
+                🔄 Refresh
+              </button>
+            </div>
             <div className="space-y-4">
               <div className="grid grid-cols-3 gap-4 text-center">
                 <div className="bg-blue-50 p-3 rounded-lg">
@@ -1227,12 +1246,7 @@ const { context } = useFrame()
                   </div>
                 )}
                 
-                {/* Debug Information */}
-                <div className="mt-3 p-2 bg-green-100 rounded text-xs text-green-700">
-                  <div>Debug: canClaim={claimStatus.canClaim.toString()}</div>
-                  <div>lastClaimTime={claimStatus.lastClaimTime || 'None'}</div>
-                  <div>nextClaimTime={claimStatus.nextClaimTime || 'None'}</div>
-                </div>
+              
               </div>
             )}
 
