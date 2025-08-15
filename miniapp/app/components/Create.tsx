@@ -278,6 +278,12 @@ export const Create: React.FC<CreateProps> = ({ setActiveTabAction }) => {
       setAccountCreated(true);
       setHasUnactivatedAccount(false);
       setActivationCode('');
+      
+      // Force a profile refresh by triggering a page reload
+      // This ensures the Account component shows updated invite usage data
+      setTimeout(() => {
+        window.location.reload();
+      }, 2000); // Wait 2 seconds for modal to be visible
     } catch (error) {
       console.error('❌ Activation failed:', error);
       const errorMessage = error instanceof Error 
