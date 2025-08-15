@@ -31,12 +31,45 @@ interface UserProfile {
   isActivated: boolean;
 }
 
+// Enhanced ClaimStatus interface to match the new endpoint
+interface ClaimStatus {
+  canClaim: boolean;
+  timeLeft: {
+    hours: number;
+    minutes: number;
+    seconds: number;
+  };
+  nextClaimTime: string | null;
+  lastClaimTime: string | null;
+  countdown: {
+    timeUntilEligibility: number;
+    eligibilityTime: string;
+    countdownComponents: {
+      totalSeconds: number;
+      hours: number;
+      minutes: number;
+      seconds: number;
+    };
+    progress: number;
+    cooldownPeriod: number;
+    timeSinceLastClaim: number;
+  };
+  metadata: {
+    accountCreatedAt: string;
+    isFirstTimeUser: boolean;
+    totalDaysSinceCreation: number;
+    cooldownHours: number;
+    cooldownMinutes: number;
+    cooldownSeconds: number;
+  };
+}
+
 interface TipStep {
-  id: string;
+  step: number;
   title: string;
   description: string;
+  icon: string;
   targetElementId: string;
-  highlightText: string;
 }
 
 interface AccountProps {
@@ -58,19 +91,188 @@ export const Account: React.FC<AccountProps> = ({ setActiveTabAction }) => {
   const [error, setError] = useState<string | null>(null);
   const [enbBalance, setEnbBalance] = useState<number>(0);
   const [enbBalanceLoading, setEnbBalanceLoading] = useState(false);
-const { context } = useFrame()  
-  // Countdown state
-  const [timeLeft, setTimeLeft] = useState<{
-    hours: number;
-    minutes: number;
-    seconds: number;
-  }>({ hours: 0, minutes: 0, seconds: 0 });
-  const [canClaim, setCanClaim] = useState(false);
+  
+  // Enhanced countdown state with all the new data
+  const [claimStatus, setClaimStatus] = useState<ClaimStatus>({
+    canClaim: false,
+    timeLeft: { hours: 0, minutes: 0, seconds: 0 },
+    nextClaimTime: null,
+    lastClaimTime: null,
+    countdown: {
+      timeUntilEligibility: 0,
+      eligibilityTime: '',
+      countdownComponents: { totalSeconds: 0, hours: 0, minutes: 0, seconds: 0 },
+      progress: 0,
+      cooldownPeriod: 0,
+      timeSinceLastClaim: 0
+    },
+    metadata: {
+      accountCreatedAt: '',
+      isFirstTimeUser: true,
+      totalDaysSinceCreation: 0,
+      cooldownHours: 24,
+      cooldownMinutes: 1440,
+      cooldownSeconds: 86400
+    }
+  });
 
+const { context } = useFrame()  
+  
   // Tips state
   const [showTipsModal, setShowTipsModal] = useState(false);
   const [currentTipStep, setCurrentTipStep] = useState(0);
   const [hasSeenTips, setHasSeenTips] = useState(false);
+  const [tipSteps] = useState<TipStep[]>([
+    {
+      step: 1,
+      title: "Welcome to ENB Mining!",
+      description: "This is your mining dashboard where you can claim daily rewards and upgrade your account.",
+      icon: "🎯",
+      targetElementId: "daily-claim-section"
+    },
+    {
+      step: 2,
+      title: "Daily Claims",
+      description: "Claim your daily ENB rewards every 24 hours. The more consecutive days, the better rewards!",
+      icon: "⏰",
+      targetElementId: "daily-claim-section"
+    },
+    {
+      step: 3,
+      title: "Upgrade Your Account",
+      description: "Upgrade to higher tiers for better daily rewards. You need consecutive days to unlock upgrades.",
+      icon: "🚀",
+      targetElementId: "upgrade-section"
+    },
+    {
+      step: 4,
+      title: "Invite Friends",
+      description: "Share your invitation code to earn rewards and help others get started!",
+      icon: "👥",
+      targetElementId: "invitation-stats-section"
+    }
+  ]);
+
+  // Fetch claim status from the enhanced endpoint
+  const fetchClaimStatus = useCallback(async (): Promise<ClaimStatus | null> => {
+    if (!address) return null;
+    
+    console.log('🔍 Fetching enhanced claim status from backend...');
+    
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/daily-claim-status/${address}`);
+      
+      if (!response.ok) {
+        console.log('⚠️ Could not fetch claim status from backend');
+        return null;
+      }
+      
+      const backendClaimStatus = await response.json();
+      console.log('✅ Enhanced claim status from backend:', backendClaimStatus);
+      
+      // The backend now returns the exact structure we need
+      return backendClaimStatus;
+    } catch (error) {
+      console.error('❌ Error fetching claim status:', error);
+      return null;
+    }
+  }, [address]);
+
+  // Update claim status from backend
+  const updateClaimStatus = useCallback(async () => {
+    const status = await fetchClaimStatus();
+    if (status) {
+      setClaimStatus(status);
+      console.log('✅ Enhanced claim status updated:', status);
+    }
+  }, [fetchClaimStatus]);
+
+  // Enhanced countdown timer using the new countdown data
+  useEffect(() => {
+    // Only run countdown when we have valid eligibility time and user can't claim yet
+    if (claimStatus.countdown.eligibilityTime && !claimStatus.canClaim) {
+      console.log('⏰ Starting countdown timer with eligibility time:', claimStatus.countdown.eligibilityTime);
+      
+      const timer = setInterval(() => {
+        setClaimStatus(prev => {
+          // Calculate the current time until eligibility
+          const now = Date.now();
+          const eligibilityTime = new Date(prev.countdown.eligibilityTime).getTime();
+          const timeUntilEligibility = Math.max(0, eligibilityTime - now);
+          
+          console.log('⏰ Countdown update:', { 
+            now: new Date(now).toISOString(), 
+            eligibilityTime: new Date(eligibilityTime).toISOString(),
+            timeUntilEligibility,
+            canClaim: prev.canClaim
+          });
+          
+          // If time is up, user can claim
+          if (timeUntilEligibility <= 0) {
+            console.log('✅ Countdown finished - user can now claim!');
+            return {
+              ...prev,
+              canClaim: true,
+              timeLeft: { hours: 0, minutes: 0, seconds: 0 },
+              countdown: {
+                ...prev.countdown,
+                timeUntilEligibility: 0,
+                progress: 100
+              }
+            };
+          }
+          
+          // Calculate time components
+          const totalSeconds = Math.floor(timeUntilEligibility / 1000);
+          const hours = Math.floor(totalSeconds / 3600);
+          const minutes = Math.floor((totalSeconds % 3600) / 60);
+          const seconds = totalSeconds % 60;
+          
+          // Calculate progress percentage
+          const cooldownPeriod = prev.countdown.cooldownPeriod;
+          const progress = Math.min(100, ((cooldownPeriod - timeUntilEligibility) / cooldownPeriod) * 100);
+          
+          return {
+            ...prev,
+            canClaim: false,
+            timeLeft: { hours, minutes, seconds },
+            countdown: {
+              ...prev.countdown,
+              timeUntilEligibility,
+              progress,
+              countdownComponents: { totalSeconds, hours, minutes, seconds }
+            }
+          };
+        });
+      }, 1000);
+
+      return () => {
+        console.log('⏰ Clearing countdown timer');
+        clearInterval(timer);
+      };
+    }
+  }, [claimStatus.countdown.eligibilityTime, claimStatus.countdown.cooldownPeriod, claimStatus.canClaim]);
+
+  // Initialize claim status when component mounts
+  useEffect(() => {
+    if (address) {
+      console.log('🚀 Initializing claim status for address:', address);
+      updateClaimStatus();
+    }
+  }, [address, updateClaimStatus]);
+
+  // Sync with backend every 30 seconds to ensure accuracy
+  useEffect(() => {
+    if (!address) return;
+
+    // Set up periodic sync
+    const syncInterval = setInterval(() => {
+      console.log('🔄 Syncing with backend...');
+      updateClaimStatus();
+    }, 30000); // Every 30 seconds
+
+    return () => clearInterval(syncInterval);
+  }, [address, updateClaimStatus]);
 
   const getMembershipLevelColor = (level: string) => {
     switch (level) {
@@ -93,55 +295,100 @@ const { context } = useFrame()
       minute: '2-digit',
     });
 
-  // Define the tip steps
-  const tipSteps: TipStep[] = [
-    {
-      id: 'daily-claim',
-      title: 'Claim ENB Daily',
-      description: 'Claim your daily ENB rewards here. The amount depends on your membership level: Based (10 ENB), Super Based (15 ENB), or Legendary (20 ENB). Come back every 24 hours to claim!',
-      targetElementId: 'daily-claim-section',
-      highlightText: 'Daily Claim'
-    },
-    {
-      id: 'share-invitation',
-      title: 'Share Your Invitation Code',
-      description: 'Share your unique invitation code with friends to help them join the platform. Every person who uses your code helps grow the community!',
-      targetElementId: 'basic-info-section',
-      highlightText: 'Share Invitation Code'
-    },
-    {
-      id: 'claim-invites',
-      title: 'Receive Extra ENB For Invites',
-      description: 'Earn bonus ENB tokens for each person who joins using your invitation code. Check your invitation statistics to see how many people you\'ve invited!',
-      targetElementId: 'invitation-stats-section',
-      highlightText: 'Receive $ENB for your invites'
-    },
-    {
-      id: 'upgrade-level',
-      title: 'Upgrade To A Higher Level',
-      description: 'Upgrade your membership level to earn more daily ENB. You need consecutive daily claims and ENB tokens in your wallet. Higher levels = higher daily rewards!',
-      targetElementId: 'upgrade-section',
-      highlightText: 'Upgrade Mining Level'
-    }
-  ];
-
-  // Add this function to check if user has seen tips (you can use localStorage or a user preference)
-  const checkIfUserHasSeenTips = () => {
+  // Fetch tips status from backend
+  const fetchTipsStatus = useCallback(async () => {
+    if (!address) return false;
+    
+    console.log('🔍 Fetching tips status from backend...');
     try {
+      const response = await fetch(`${API_BASE_URL}/api/has-seen-tips/${address}`);
+      
+      if (!response.ok) {
+        console.log('⚠️ Could not fetch tips status, using fallback logic');
+        return false; // Default to showing tips if check fails
+      }
+      
+      const data = await response.json();
+      console.log('✅ Tips status from backend:', data);
+      
+      return data.hasSeenTips || false;
+    } catch (error) {
+      console.error('❌ Error fetching tips status:', error);
+      return false; // Default to showing tips if check fails
+    }
+  }, [address]);
+
+  // Mark tips as seen in backend
+  const markTipsAsSeen = useCallback(async () => {
+    if (!address) return false;
+    
+    console.log('✅ Marking tips as seen in backend...');
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/mark-tips-seen/${address}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        }
+      });
+      
+      if (!response.ok) {
+        console.log('⚠️ Could not mark tips as seen, using fallback logic');
+        // Fall back to localStorage if backend fails
+        try {
+          localStorage.setItem('enb-tips-seen', 'true');
+        } catch {
+          // Ignore localStorage errors
+        }
+        return false;
+      }
+      
+      const data = await response.json();
+      console.log('✅ Tips marked as seen in backend:', data);
+      
+      // Also update localStorage as backup
+      try {
+        localStorage.setItem('enb-tips-seen', 'true');
+      } catch {
+        // Ignore localStorage errors
+      }
+      
+      return data.success || false;
+    } catch (error) {
+      console.error('❌ Error marking tips as seen:', error);
+      // Fall back to localStorage if backend fails
+      try {
+        localStorage.setItem('enb-tips-seen', 'true');
+      } catch {
+        // Ignore localStorage errors
+      }
+      return false;
+    }
+  }, [address]);
+
+  // Check if user has seen tips (with fallback to localStorage)
+  const checkIfUserHasSeenTips = useCallback(async () => {
+    if (!address) return false;
+    
+    try {
+      // Try backend first
+      const backendStatus = await fetchTipsStatus();
+      if (backendStatus !== null) {
+        return backendStatus;
+      }
+      
+      // Fall back to localStorage
       const seen = localStorage.getItem('enb-tips-seen');
       return seen === 'true';
     } catch {
-      return false;
+      // Fall back to localStorage if all else fails
+      try {
+        const seen = localStorage.getItem('enb-tips-seen');
+        return seen === 'true';
+      } catch {
+        return false;
+      }
     }
-  };
-
-  const markTipsAsSeen = () => {
-    try {
-      localStorage.setItem('enb-tips-seen', 'true');
-    } catch {
-      // Ignore localStorage errors
-    }
-  };
+  }, [address, fetchTipsStatus]);
 
   // Function to scroll to specific elements
   const scrollToElement = (elementId: string) => {
@@ -172,64 +419,69 @@ const { context } = useFrame()
     }
   };
 
-  const handleFinishTips = () => {
+  const handleFinishTips = async () => {
+    console.log('🎯 Finishing tips tour...');
+    
+    // Mark tips as seen in backend
+    const success = await markTipsAsSeen();
+    
+    if (success) {
+      console.log('✅ Tips marked as seen successfully');
+    } else {
+      console.log('⚠️ Tips marked as seen with fallback');
+    }
+    
+    // Update local state
     setShowTipsModal(false);
     setCurrentTipStep(0);
-    markTipsAsSeen();
     setHasSeenTips(true);
   };
 
-  const handleSkipTips = () => {
+  const handleSkipTips = async () => {
+    console.log('⏭️ Skipping tips tour...');
+    
+    // Mark tips as seen in backend
+    const success = await markTipsAsSeen();
+    
+    if (success) {
+      console.log('✅ Tips marked as seen successfully');
+    } else {
+      console.log('⚠️ Tips marked as seen with fallback');
+    }
+    
+    // Update local state
     setShowTipsModal(false);
     setCurrentTipStep(0);
-    markTipsAsSeen();
     setHasSeenTips(true);
   };
 
   // Add a function to restart tips (optional - you can add a button for this)
   const handleRestartTips = () => {
+    console.log('🔄 Restarting tips tour...');
     setCurrentTipStep(0);
     setShowTipsModal(true);
     scrollToElement(tipSteps[0].targetElementId);
   };
 
-  // Calculate time remaining until next daily claim
-  const calculateTimeLeft = useCallback((lastDailyClaimTime: string | null) => {
-    if (!lastDailyClaimTime) {
-      setCanClaim(true);
-      setTimeLeft({ hours: 0, minutes: 0, seconds: 0 });
-      return;
-    }
-
-    const lastClaim = new Date(lastDailyClaimTime);
-    const nextClaim = new Date(lastClaim.getTime() + 24 * 60 * 60 * 1000); // Add 24 hours
-    const now = new Date();
-    const timeDiff = nextClaim.getTime() - now.getTime();
-
-    if (timeDiff <= 0) {
-      setCanClaim(true);
-      setTimeLeft({ hours: 0, minutes: 0, seconds: 0 });
-    } else {
-      setCanClaim(false);
-      const hours = Math.floor(timeDiff / (1000 * 60 * 60));
-      const minutes = Math.floor((timeDiff % (1000 * 60 * 60)) / (1000 * 60));
-      const seconds = Math.floor((timeDiff % (1000 * 60)) / 1000);
-      setTimeLeft({ hours, minutes, seconds });
-    }
-  }, []);
+  
 
 
 
-  // Update countdown every second
+  // Sync with backend every 30 seconds to ensure accuracy
   useEffect(() => {
-    if (!profile?.lastDailyClaimTime) return;
+    if (!address) return;
 
-    const interval = setInterval(() => {
-      calculateTimeLeft(profile.lastDailyClaimTime || null);
-    }, 1000);
+    // Initial fetch
+    updateClaimStatus();
 
-    return () => clearInterval(interval);
-  }, [profile?.lastDailyClaimTime, calculateTimeLeft]);
+    // Set up periodic sync
+    const syncInterval = setInterval(() => {
+      console.log('🔄 Syncing with backend...');
+      updateClaimStatus();
+    }, 30000); // Every 30 seconds
+
+    return () => clearInterval(syncInterval);
+  }, [address, updateClaimStatus]);
 
   const checkAccountStatus = useCallback(async () => {
     if (!address) {
@@ -247,7 +499,6 @@ const { context } = useFrame()
       const res = await fetch(`${API_BASE_URL}/api/profile/${address}`);
       
       console.log('Response status:', res.status);
-      console.log('Response headers:', Object.fromEntries(res.headers.entries()));
       
       if (res.status === 404) {
         // Account doesn't exist, show create message
@@ -280,51 +531,51 @@ const { context } = useFrame()
       // Account exists and is activated, show profile
       console.log('Account activated, showing profile');
       setProfile(userProfile);
-      // Calculate initial countdown
-      calculateTimeLeft(userProfile.lastDailyClaimTime || null);
+      
+      // Fetch initial claim status
+      await updateClaimStatus();
+      
     } catch (err) {
       console.error('Error checking account status:', err);
       setError(`Failed to load account information: ${err instanceof Error ? err.message : 'Unknown error'}`);
     } finally {
       setLoading(false);
     }
-  }, [address, calculateTimeLeft]);
+  }, [address, updateClaimStatus]);
 
   const publicClient = useMemo(() => {
-  return createPublicClient({ chain: base, transport: http() });
-}, []);
+    return createPublicClient({ chain: base, transport: http() });
+  }, []);
 
+  const fetchEnbBalance = useCallback(async () => {
+    console.log('💰 Fetching ENB balance...');
+    
+    if (!address) {
+      console.log('❌ No address provided for balance fetch');
+      return;
+    }
 
-const fetchEnbBalance = useCallback(async () => {
-  console.log('💰 Fetching ENB balance...');
-  console.log('📋 Balance fetch data:', { address });
-  
-  if (!address) {
-    console.log('❌ No address provided for balance fetch');
-    return;
-  }
+    setEnbBalanceLoading(true);
+    try {
+      console.log('📤 Reading contract balance...');
+      const balance = await publicClient.readContract({
+        address: ENB_TOKEN_ADDRESS as `0x${string}`,
+        abi: ENB_TOKEN_ABI,
+        functionName: 'balanceOf',
+        args: [address as `0x${string}`]
+      }) as bigint;
 
-  setEnbBalanceLoading(true);
-  try {
-    console.log('📤 Reading contract balance...');
-    const balance = await publicClient.readContract({
-      address: ENB_TOKEN_ADDRESS as `0x${string}`,
-      abi: ENB_TOKEN_ABI,
-      functionName: 'balanceOf',
-      args: [address as `0x${string}`]
-    }) as bigint;
-
-    const balanceInEnb = Number(balance) / Math.pow(10, 18);
-    console.log('✅ ENB balance fetched:', { rawBalance: balance.toString(), balanceInEnb });
-    setEnbBalance(balanceInEnb);
-  } catch (err) {
-    console.error('❌ Error fetching ENB balance:', err);
-    setEnbBalance(0);
-  } finally {
-    setEnbBalanceLoading(false);
-    console.log('🏁 ENB balance fetch finished');
-  }
-}, [address, publicClient]); // publicClient is now stable
+      const balanceInEnb = Number(balance) / Math.pow(10, 18);
+      console.log('✅ ENB balance fetched:', { rawBalance: balance.toString(), balanceInEnb });
+      setEnbBalance(balanceInEnb);
+    } catch (err) {
+      console.error('❌ Error fetching ENB balance:', err);
+      setEnbBalance(0);
+    } finally {
+      setEnbBalanceLoading(false);
+      console.log('🏁 ENB balance fetch finished');
+    }
+  }, [address, publicClient]);
 
   const refreshProfile = async () => {
     if (!address) return;
@@ -334,7 +585,8 @@ const fetchEnbBalance = useCallback(async () => {
       if (res.ok) {
         const updated = await res.json();
         setProfile(updated);
-        calculateTimeLeft(updated.lastDailyClaimTime || null);
+        // Also refresh claim status when profile is refreshed
+        await updateClaimStatus();
       }
     } catch (err) {
       console.error('Error refreshing profile:', err);
@@ -342,47 +594,79 @@ const fetchEnbBalance = useCallback(async () => {
   };
 
   const handleDailyClaim = async () => {
-    console.log('🎯 Starting daily claim process...');
-    console.log('📋 Claim data:', { address, canClaim });
-    
-    if (!address || !canClaim) {
-      console.log('❌ Cannot claim - missing address or claim not available');
+    if (!address) {
+      console.log('❌ No wallet address available');
+      alert('Please connect your wallet first');
       return;
     }
 
+    console.log('🚀 Starting daily claim process...');
+    console.log('📋 Current state:', { 
+      address, 
+      canClaim: claimStatus.canClaim,
+      timeLeft: claimStatus.timeLeft
+    });
+
     setDailyClaimLoading(true);
-    console.log('✅ Proceeding with daily claim');
-    
     try {
-      console.log('🔄 Using relayer for daily claim...');
+      console.log('📡 Making request to backend relayer...');
       
-      // Use the relayer endpoint instead of direct contract call
       const res = await fetch(`${API_BASE_URL}/relay/daily-claim`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ user: address }),
       });
 
-      console.log('📥 Relayer response status:', res.status);
-      
+      console.log('📥 Response received:', { 
+        status: res.status, 
+        statusText: res.statusText,
+        ok: res.ok
+      });
+
       const data = await res.json();
-      console.log('📋 Relayer response data:', data);
-      
+      console.log('📄 Response data:', data);
+
       if (!res.ok) {
-        console.error('❌ Relayer request failed:', data);
-        throw new Error(data.error || 'Daily claim failed');
+        console.log('❌ Backend returned error status');
+        if (data.error === 'DailyClaimOnCooldown') {
+          throw new Error('Daily claim is still on cooldown. Please wait until your next claim is available.');
+        } else if (data.error === 'ContractError') {
+          throw new Error('Transaction failed. Please check if your account exists and try again.');
+        } else {
+          throw new Error(data.message || data.error || 'Daily claim failed');
+        }
       }
 
-      console.log('✅ Daily claim successful via relayer');
-      setShowDailyClaimModal(true);
+      console.log('✅ Daily claim successful:', data);
+      alert('Daily claim successful!');
+      
+      // Immediately update claim status from backend after successful claim
+      console.log('🔄 Refreshing claim status after successful claim...');
+      await updateClaimStatus();
+      
+      // Force an immediate countdown restart by updating the state
+      setClaimStatus(prev => ({
+        ...prev,
+        canClaim: false // Reset to false to trigger countdown restart
+      }));
+      
+      // Add a small delay and refresh again to ensure backend sync
+      setTimeout(async () => {
+        console.log('🔄 Delayed refresh to ensure backend sync...');
+        await updateClaimStatus();
+      }, 2000);
+      
+      // Refresh other data
+      await fetchEnbBalance();
       await refreshProfile();
-      await fetchEnbBalance(); // Refresh ENB balance after claim
+      
+      console.log('✅ All data refreshed after claim');
     } catch (err) {
-      console.error('❌ Daily claim failed:', err);
-      alert('Daily claim failed. Please try again.');
+      console.error('❌ Daily claim error:', err);
+      alert(err instanceof Error ? err.message : 'Daily Claim failed. Please try again.');
     } finally {
+      console.log('🏁 Setting loading to false');
       setDailyClaimLoading(false);
-      console.log('🏁 Daily claim process finished');
     }
   };
 
@@ -401,22 +685,21 @@ const fetchEnbBalance = useCallback(async () => {
     
     await sdk.actions.composeCast({
       text: `I just claimed my daily ${enbAmount} $ENB rewards as a ${profile?.membershipLevel} member! Join me and start earning now! ${profile?.invitationCode}`,
-      embeds: ["https://farcaster.xyz/~/mini-apps/launch?domain=enb-crushers.vercel.app"]
+      embeds: ["https://enb-crushers.vercel.app"]
     });
   };
 
   const handleUpgradeWarpcastShare = async () => {
     await sdk.actions.composeCast({
       text: "I just upgraded my mining account to increase my daily earnings! Join me and start earning NOW!",
-      embeds: ["https://farcaster.xyz/~/mini-apps/launch?domain=enb-crushers.vercel.app"]
+      embeds: ["https://enb-crushers.vercel.app"]
     });
   };
-
 
   const handleInvitationCode = async () => {
     await sdk.actions.composeCast({
       text: `Use my invitation code to start earning $ENB and start earning now! ${profile?.invitationCode}`,
-      embeds: ["https://farcaster.xyz/~/mini-apps/launch?domain=enb-crushers.vercel.app"]
+      embeds: ["https://enb-crushers.vercel.app"]
     });
   };
 
@@ -424,7 +707,7 @@ const fetchEnbBalance = useCallback(async () => {
 
   const handleBuyENB = async () => {
     await sdk.actions.openUrl(url)
-      };
+  };
 
   const handleBooster = async () => {
     setShowBoosterModal(true);   
@@ -436,7 +719,6 @@ const fetchEnbBalance = useCallback(async () => {
 
   const handleUpgrade = async () => {
     console.log('🚀 Starting upgrade process...');
-    console.log('📋 Upgrade data:', { address, profile: profile ? { membershipLevel: profile.membershipLevel, consecutiveDays: profile.consecutiveDays } : null });
     
     if (!address || !profile) {
       console.log('❌ Cannot upgrade - missing address or profile');
@@ -470,7 +752,6 @@ const fetchEnbBalance = useCallback(async () => {
     try {
       console.log('🔄 Using relayer for upgrade...');
       
-      // Use the relayer endpoint instead of direct contract call
       const res = await fetch(`${API_BASE_URL}/relay/upgrade-membership`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -493,7 +774,7 @@ const fetchEnbBalance = useCallback(async () => {
       console.log('✅ Upgrade successful via relayer');
       setShowUpgradeModal(true);
       await refreshProfile();
-      await fetchEnbBalance(); // Refresh ENB balance after upgrade
+      await fetchEnbBalance();
     } catch (err) {
       console.error('❌ Upgrade failed:', err);
       
@@ -534,16 +815,34 @@ const fetchEnbBalance = useCallback(async () => {
 
   // Add this useEffect to show tips on first load
   useEffect(() => {
-    if (profile && profile.isActivated) {
-      const hasSeenTipsBefore = checkIfUserHasSeenTips();
-      if (!hasSeenTipsBefore) {
-        setShowTipsModal(true);
-        setHasSeenTips(false);
-      } else {
-        setHasSeenTips(true);
+    const initializeTips = async () => {
+      if (profile && profile.isActivated && address) {
+        console.log('🎯 Initializing tips for activated profile...');
+        
+        try {
+          const hasSeenTipsBefore = await checkIfUserHasSeenTips();
+          console.log('📋 Tips status:', { hasSeenTipsBefore });
+          
+          if (!hasSeenTipsBefore) {
+            console.log('🆕 User has not seen tips, showing tips modal');
+            setShowTipsModal(true);
+            setHasSeenTips(false);
+          } else {
+            console.log('✅ User has seen tips, hiding tips modal');
+            setHasSeenTips(true);
+            setShowTipsModal(false);
+          }
+        } catch (error) {
+          console.error('❌ Error initializing tips:', error);
+          // Default to showing tips if there's an error
+          setShowTipsModal(true);
+          setHasSeenTips(false);
+        }
       }
-    }
-  }, [profile]);
+    };
+
+    initializeTips();
+  }, [profile, address, checkIfUserHasSeenTips]);
 
   // Loading state
   if (loading) {
@@ -703,23 +1002,23 @@ const fetchEnbBalance = useCallback(async () => {
         {/* Basic Info */}
         <div id="basic-info-section" className="bg-white p-6 rounded-lg shadow-md border">
           <h2 className="text-xl font-semibold mb-4 text-gray-800">Basic Information</h2>
-<div className="flex flex-row space-x-4 justify-start items-start">
-        {context?.user ? (
-          <>
-            {context?.user?.pfpUrl && (
-              <img
-                src={context?.user?.pfpUrl}
-                className="w-14 h-14 rounded-full"
-                alt="User Profile"
-                width={56}
-                height={56}
-              />
+          <div className="flex flex-row space-x-4 justify-start items-start">
+            {context?.user ? (
+              <>
+                {context?.user?.pfpUrl && (
+                  <img
+                    src={context?.user?.pfpUrl}
+                    className="w-14 h-14 rounded-full"
+                    alt="User Profile"
+                    width={56}
+                    height={56}
+                  />
+                )}
+              </>
+            ) : (
+              <p className="text-sm text-left">User context not available</p>
             )}
-          </>
-        ) : (
-          <p className="text-sm text-left">User context not available</p>
-        )}
-      </div>
+          </div>
           <div className="space-y-3">
             <div>
               <label className="text-sm font-medium text-gray-600">Wallet Address</label>
@@ -863,46 +1162,85 @@ const fetchEnbBalance = useCallback(async () => {
           </div>
         )}
 
-        {/* Daily Claim Actions */}
+        {/* Daily Claim Actions - ENHANCED VERSION */}
         <div id="daily-claim-section" className="bg-white p-6 rounded-lg shadow-md border">
           <h2 className="text-xl font-semibold mb-4 text-gray-800">Daily Claim</h2>
           <div className="space-y-4">
-            {/* Countdown Timer */}
-            {!canClaim && (
-              <div className="text-center p-4 bg-gray-50 rounded-lg">
-                <div className="text-sm text-gray-600 mb-2">Next claim available in:</div>
-                <div className="text-2xl font-bold text-gray-800 font-mono">
-                  {String(timeLeft.hours).padStart(2, '0')}:
-                  {String(timeLeft.minutes).padStart(2, '0')}:
-                  {String(timeLeft.seconds).padStart(2, '0')}
+            
+            {/* Enhanced Countdown Timer with Progress Bar */}
+            {!claimStatus.canClaim && claimStatus.countdown.eligibilityTime && (
+              <div key={`countdown-${claimStatus.countdown.eligibilityTime}-${claimStatus.canClaim}`} className="text-center p-4 bg-gray-50 rounded-lg">
+                <div className="text-sm text-gray-600 mb-2">
+                  {claimStatus.metadata.isFirstTimeUser 
+                    ? 'First claim available in:' 
+                    : 'Next claim available in:'
+                  }
                 </div>
-                <div className="text-xs text-gray-500 mt-1">HH:MM:SS</div>
+                
+                {/* Progress Bar */}
+                <div className="w-full bg-gray-200 rounded-full h-3 mb-3">
+                  <div 
+                    className="bg-blue-600 h-3 rounded-full transition-all duration-300"
+                    style={{ width: `${claimStatus.countdown.progress}%` }}
+                  ></div>
+                </div>
+                
+                {/* Countdown Timer */}
+                <div className="text-2xl font-bold text-gray-800 font-mono mb-2">
+                  {String(claimStatus.timeLeft.hours).padStart(2, '0')}:
+                  {String(claimStatus.timeLeft.minutes).padStart(2, '0')}:
+                  {String(claimStatus.timeLeft.seconds).padStart(2, '0')}
+                </div>
+                <div className="text-xs text-gray-500 mb-2">HH:MM:SS</div>
+                
+                {/* Additional Info */}
+                <div className="text-xs text-gray-600 space-y-1">
+                  <div>Progress: {claimStatus.countdown.progress.toFixed(1)}%</div>
+                  {claimStatus.metadata.isFirstTimeUser && (
+                    <div>Account age: {claimStatus.metadata.totalDaysSinceCreation} days</div>
+                  )}
+                  <div>Cooldown: {claimStatus.metadata.cooldownHours} hours</div>
+                </div>
+                
+              </div>
+            )}
+
+            {/* Loading State for Countdown */}
+            {!claimStatus.canClaim && !claimStatus.countdown.eligibilityTime && (
+              <div className="text-center p-4 bg-gray-50 rounded-lg">
+                <div className="text-sm text-gray-600 mb-2">
+                  Loading countdown information...
+                </div>
+                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mx-auto"></div>
               </div>
             )}
 
             {/* Claim Available Message */}
-            {canClaim && profile.lastDailyClaimTime && (
-              <div className="text-center p-4 bg-green-50 rounded-lg">
-                <div className="text-sm text-green-600 font-medium">
+            {claimStatus.canClaim && (
+              <div key={`claim-available-${claimStatus.countdown.eligibilityTime}-${claimStatus.canClaim}`} className="text-center p-4 bg-green-50 rounded-lg">
+                <div className="text-sm text-green-600 font-medium mb-2">
                   ✓ Daily claim is now available!
                 </div>
-              </div>
-            )}
-
-            {/* First Time Claim Message */}
-            {canClaim && !profile.lastDailyClaimTime && (
-              <div className="text-center p-4 bg-blue-50 rounded-lg">
-                <div className="text-sm text-blue-600 font-medium">
-                  🎉 Ready for your first daily claim!
+                {claimStatus.metadata.isFirstTimeUser && (
+                  <div className="text-xs text-green-500">
+                    🎉 First time claiming! Welcome to ENB Mining!
+                  </div>
+                )}
+                
+                {/* Debug Information */}
+                <div className="mt-3 p-2 bg-green-100 rounded text-xs text-green-700">
+                  <div>Debug: canClaim={claimStatus.canClaim.toString()}</div>
+                  <div>lastClaimTime={claimStatus.lastClaimTime || 'None'}</div>
+                  <div>nextClaimTime={claimStatus.nextClaimTime || 'None'}</div>
                 </div>
               </div>
             )}
 
             <button
-              disabled={dailyClaimLoading || !profile?.isActivated || !canClaim || !address}
+              disabled={dailyClaimLoading || !profile?.isActivated || !claimStatus.canClaim || !address}
               onClick={handleDailyClaim}
               className={`w-full px-4 py-2 rounded-lg font-medium transition-colors ${
-                canClaim && profile?.isActivated && address
+                claimStatus.canClaim && profile?.isActivated && address
                   ? 'bg-blue-600 text-white hover:bg-blue-700'
                   : 'bg-gray-300 text-gray-500 cursor-not-allowed'
               } disabled:opacity-60`}
@@ -913,7 +1251,7 @@ const fetchEnbBalance = useCallback(async () => {
                 ? 'Connect Wallet'
                 : !profile?.isActivated
                 ? 'Account Not Activated'
-                : canClaim 
+                : claimStatus.canClaim 
                 ? 'Claim Daily Rewards' 
                 : 'Claim Unavailable'
               }
@@ -1098,8 +1436,8 @@ const fetchEnbBalance = useCallback(async () => {
         </div>
       )}
 
-{/* Level Information Modal */}
-{showInformationModal && (
+      {/* Level Information Modal */}
+      {showInformationModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white dark:bg-gray-900 rounded-lg p-6 max-w-md w-full mx-4">
             <div className="text-center mb-6">
@@ -1112,21 +1450,21 @@ const fetchEnbBalance = useCallback(async () => {
               <p className="text-gray-600 dark:text-gray-400">
                 On the Base Layer there are 3 levels to earn and each level has the daily earning
               </p>
-		<ul className="text-left space-y-2 mt-3">
-		  <li>• <strong>Based</strong> - On this level (the first level) you earn 10 ENB a day</li>
-		  <li>• <strong>Super Based</strong> - As a Super Based member you earn 15 ENB. To upgrade to Super Based you need:
-		    <ul className="ml-4 mt-1 space-y-1">
-		      <li>- 30,000 ENB in your wallet</li>
-		      <li>- 14 consecutive days of daily claims</li>
-		    </ul>
-		  </li>
-		  <li>• <strong>Legendary</strong> - The Legendary is the highest level allowing you to earn 20 ENB everyday. To upgrade to Legendary you need:
-		    <ul className="ml-4 mt-1 space-y-1">
-		      <li>- 60,000 ENB in your wallet</li>
-		      <li>- 28 consecutive days of daily claims</li>
-		    </ul>
-		  </li>
-		</ul>
+              <ul className="text-left space-y-2 mt-3">
+                <li>• <strong>Based</strong> - On this level (the first level) you earn 10 ENB a day</li>
+                <li>• <strong>Super Based</strong> - As a Super Based member you earn 15 ENB. To upgrade to Super Based you need:
+                  <ul className="ml-4 mt-1 space-y-1">
+                    <li>- 30,000 ENB in your wallet</li>
+                    <li>- 14 consecutive days of daily claims</li>
+                  </ul>
+                </li>
+                <li>• <strong>Legendary</strong> - The Legendary is the highest level allowing you to earn 20 ENB everyday. To upgrade to Legendary you need:
+                  <ul className="ml-4 mt-1 space-y-1">
+                    <li>- 60,000 ENB in your wallet</li>
+                    <li>- 28 consecutive days of daily claims</li>
+                  </ul>
+                </li>
+              </ul>
             </div>
             <div className="flex justify-center space-x-4">
               <Button onClick={() => setInformationModal(false)}>
@@ -1136,6 +1474,7 @@ const fetchEnbBalance = useCallback(async () => {
           </div>
         </div>
       )}
+
 
       {/* Tips Modal */}
       {showTipsModal && <TipsModal />}
