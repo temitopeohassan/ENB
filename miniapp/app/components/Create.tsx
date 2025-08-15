@@ -217,7 +217,7 @@ export const Create: React.FC<CreateProps> = ({ setActiveTabAction }) => {
     try {
       await sdk.actions.composeCast({
         text: "I just created my $ENB mining account. I am looking for an account activation code",
-        embeds: ["https://farcaster.xyz/~/mini-apps/launch?domain=enb-crushers.vercel.app"]
+        embeds: ["https://enb-crushers.vercel.app"]
       });
     } catch (error) {
       console.error('Failed to share on Farcaster:', error);
@@ -228,7 +228,7 @@ export const Create: React.FC<CreateProps> = ({ setActiveTabAction }) => {
     try {
       await sdk.actions.composeCast({
         text: "I Just Activated My Base Layer Account. I am now earning $ENB everyday! Join me",
-        embeds: ["https://farcaster.xyz/~/mini-apps/launch?domain=enb-crushers.vercel.app"]
+        embeds: ["https://enb-crushers.vercel.app"]
       });
     } catch (error) {
       console.error('Failed to share on Farcaster:', error);
