@@ -4,10 +4,10 @@ export async function GET() {
   const config = {
     accountAssociation: {
       header:
-        'eyJmaWQiOjczODU3NCwidHlwZSI6ImN1c3RvZHkiLCJrZXkiOiIweDZkNjQ4NDVhOUExYTEwN0Y5OTk3RTQ3N2FjMTk5NTI2ZEViZTlDZTMifQ',
+        'eyJmaWQiOjczODU3NCwidHlwZSI6ImF1dGgiLCJrZXkiOiIweGRiMjk3OWZkRjY4OTU3MUREMTYyN0E2MzNkNjk3MTZEMzlkOTE5RGMifQ',
       payload: 'eyJkb21haW4iOiJlbmItY3J1c2hlcnMudmVyY2VsLmFwcCJ9',
       signature:
-        'MHg0YzZlNWMxYTVjOGExNjgzY2VjODY0Y2Y3MDQ2NGYxZDczZjdjNGExMjMzOWUyOTQxMTRlOTQ4M2NlMDgwZGJlNGJjNzY3ZGM4YWZlZTVlOThmZWYwMWViYmQ2MTJkYTdlMjZlMTQ4MzA1M2JlY2Y3ZDdmYWEyNDU4NDBlNzJhMDFj',
+        'NQq8k6SnEubOPyxJH6Egm8qtWG52hhD3PUKHpGv3cI96jc7dQD7V6OisWuFfsQgNmxnq4cEjNoMdlgoGMpZDtxs=',
     },
     frame: {
       version: '1',
@@ -21,8 +21,8 @@ export async function GET() {
       webhookUrl: 'https://enb-crushers.vercel.app/api/webhook',
       subtitle: 'Fast, Simple, Onchain',
       description: 'earn ENB daily on Farcaster',
-      primaryCategory: 'productivity',
-      tags: ['bounties', 'tasks', 'incentives', 'blockchain'],
+      primaryCategory: 'finance',
+      tags: ['boosters', 'daily claims', 'mining', 'blockchain'],
       tagline: 'Fast, Simple, Onchain',
       ogTitle: 'enb',
       ogDescription: 'earn ENB daily on Farcaster',

@@ -16,7 +16,27 @@ export default function App() {
   const { connect } = useConnect();
   const [activeTab, setActiveTabAction] = useState("account");
   const [miniAppAdded, setMiniAppAdded] = useState(false);
+  const [isCheckingMiniApp, setIsCheckingMiniApp] = useState(true);
   const frameConnector = useMemo(() => farcasterFrame(), []);
+
+  // Check if mini app is already added
+  useEffect(() => {
+    const checkMiniAppStatus = async () => {
+      try {
+        setIsCheckingMiniApp(true);
+        // For now, we'll assume the mini app is not added
+        // The actual status will be determined when the user tries to add it
+        setMiniAppAdded(false);
+      } catch (err) {
+        console.error("Failed to check mini app status:", err);
+        setMiniAppAdded(false);
+      } finally {
+        setIsCheckingMiniApp(false);
+      }
+    };
+
+    checkMiniAppStatus();
+  }, []);
 
   // Auto-connect wallet if not connected
   useEffect(() => {
@@ -50,31 +70,54 @@ export default function App() {
     try {
       await sdk.actions.addMiniApp();
       setMiniAppAdded(true);
+      console.log("✅ Mini app added successfully");
     } catch (err: unknown) {
+      console.log("🔍 Mini app add error details:", {
+        error: err,
+        name: err instanceof Error ? err.name : 'N/A',
+        message: err instanceof Error ? err.message : 'N/A',
+        constructor: err?.constructor?.name
+      });
+      
       if (err instanceof Error) {
         if (err.name === "RejectedByUser") {
           console.warn("User rejected adding the Mini App");
         } else if (err.name === "InvalidDomainManifestJson") {
           console.error("Manifest JSON is invalid");
+        } else if (err.name === "AlreadyAdded" || err.message?.includes("already added")) {
+          // Mini app is already added
+          console.log("ℹ️ Mini app is already added");
+          setMiniAppAdded(true);
         } else {
           console.error("Unknown error adding Mini App:", err.message);
         }
       } else {
         console.error("Non-standard error occurred while adding Mini App:", err);
       }
+      // Keep the state as false if adding failed (unless it's already added)
+      if (!(err instanceof Error && (err.name === "AlreadyAdded" || err.message?.includes("already added")))) {
+        setMiniAppAdded(false);
+      }
     }
   }, []);
 
   const addButton = useMemo(() => {
+    // Don't show anything while checking mini app status
+    if (isCheckingMiniApp) {
+      return null;
+    }
+
+    // If mini app is already added, show the "Added" indicator
     if (miniAppAdded) {
       return (
-        <div className="flex items-center space-x-1 text-sm font-medium text-[#0052FF] animate-fade-out">
+        <div className="flex items-center space-x-1 text-sm font-medium text-[#0052FF]">
           <Icon name="check" size="sm" className="text-[#0052FF]" />
           <span>Added</span>
         </div>
       );
     }
 
+    // Show add button if mini app is not added
     return (
       <Button
         variant="ghost"
@@ -86,7 +129,7 @@ export default function App() {
         Add Mini App
       </Button>
     );
-  }, [miniAppAdded, handleAddMiniApp]);
+  }, [miniAppAdded, isCheckingMiniApp, handleAddMiniApp]);
 
   const truncateAddress = (addr: string) => `${addr.slice(0, 6)}...${addr.slice(-4)}`;
 
