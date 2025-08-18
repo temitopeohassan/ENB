@@ -16,18 +16,22 @@ export async function GET() {
       splashImageUrl: 'https://enb-crushers.vercel.app/splash.png',
       splashBackgroundColor: '#A93445',
       homeUrl: 'https://enb-crushers.vercel.app/',
+      imageUrl: 'https://enb-crushers.vercel.app/image.png',
+      buttonTitle: 'Start Mining',
       heroImageUrl:
         'https://enb-crushers.vercel.app/image.png',
       webhookUrl: 'https://enb-crushers.vercel.app/api/webhook',
       subtitle: 'Fast, Simple, Onchain',
       description: 'earn ENB daily on Farcaster',
+      screenshotUrls: 'https://enb-crushers.vercel.app/splash.png',
       primaryCategory: 'finance',
-      tags: ['boosters', 'daily claims', 'mining', 'blockchain'],
+      tags: ['boosters', 'daily', 'mining', ' claims'],
       tagline: 'Fast, Simple, Onchain',
-      ogTitle: 'enb',
+      ogTitle: 'ENB Mining',
       ogDescription: 'earn ENB daily on Farcaster',
       ogImageUrl:
         'https://enb-crushers.vercel.app/og-image.png',
+      castShareUrl: 'https://enb-crushers.vercel.app/',
     },
   };
 
