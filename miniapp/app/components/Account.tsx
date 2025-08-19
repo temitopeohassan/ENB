@@ -175,6 +175,16 @@ export const Account: React.FC<AccountProps> = ({ setActiveTabAction }) => {
           onInvitationCodeShare={handleInvitationCode}
         />
 
+        {/* Daily Claim Actions */}
+        <DailyClaimCard
+          claimStatus={claimStatus}
+          profile={profile}
+          address={profile.walletAddress}
+          dailyClaimLoading={dailyClaimLoading}
+          onDailyClaim={handleDailyClaim}
+          onRefreshMining={refreshMiningActivity}
+        />
+
         {/* Token Info */}
         <TokenBalanceCard
           enbBalance={enbBalance}
@@ -196,16 +206,6 @@ export const Account: React.FC<AccountProps> = ({ setActiveTabAction }) => {
         {profile.invitationCode && (
           <InvitationStatsCard walletAddress={profile.walletAddress} />
         )}
-
-        {/* Daily Claim Actions */}
-        <DailyClaimCard
-          claimStatus={claimStatus}
-          profile={profile}
-          address={profile.walletAddress}
-          dailyClaimLoading={dailyClaimLoading}
-          onDailyClaim={handleDailyClaim}
-          onRefreshMining={refreshMiningActivity}
-        />
 
         {/* Boosters */}
         <BoosterCard onBoosterClick={handleBooster} />

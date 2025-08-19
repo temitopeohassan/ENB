@@ -23,9 +23,18 @@ export async function GET() {
       webhookUrl: 'https://enb-crushers.vercel.app/api/webhook',
       subtitle: 'Fast, Simple, Onchain',
       description: 'earn ENB daily on Farcaster',
-      screenshotUrls: 'https://enb-crushers.vercel.app/splash.png',
+      "screenshotUrls": [
+      "https://enb-crushers.vercel.app/IMG_1781.jpg",
+      "https://enb-crushers.vercel.app/IMG_1782.jpg",
+      "https://enb-crushers.vercel.app/IMG_1780.jpg"
+    ],
       primaryCategory: 'finance',
-      tags: ['boosters', 'daily', 'mining', ' claims'],
+     tags: [
+      "daily",
+      "mining",
+      "claim",
+      "earn"
+    ],
       tagline: 'Fast, Simple, Onchain',
       ogTitle: 'ENB Mining',
       ogDescription: 'earn ENB daily on Farcaster',
