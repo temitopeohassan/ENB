@@ -67,8 +67,6 @@ export const MiningActivityCard: React.FC<MiningActivityCardProps> = ({
   const lastClaimDate = miningActivity?.lastClaimDate ?? profile.lastDailyClaimTime;
   const canClaimToday = miningActivity?.canClaimToday ?? false;
   const timeLeft = miningActivity?.timeLeft ?? { hours: 0, minutes: 0, seconds: 0 };
-  const nextMilestone = miningActivity?.nextMilestone;
-  const progressToMilestone = miningActivity?.progressToMilestone ?? 0;
 
   if (miningLoading && !miningActivity) {
     return (
@@ -150,46 +148,9 @@ export const MiningActivityCard: React.FC<MiningActivityCardProps> = ({
             ></div>
           </div>
           
-          {/* Streak Milestones */}
-          <div className="text-xs text-gray-500">
-            {consecutiveDays < 14 && (
-              <span>Next milestone: {14 - consecutiveDays} days to Super Based</span>
-            )}
-            {consecutiveDays >= 14 && consecutiveDays < 28 && (
-              <span>Next milestone: {28 - consecutiveDays} days to Legendary</span>
-            )}
-            {consecutiveDays >= 28 && (
-              <span className="text-purple-600 font-medium">🎉 Legendary status achieved!</span>
-            )}
-          </div>
+         
         </div>
 
-        {/* Next Milestone Progress (if available) */}
-        {nextMilestone && (
-          <div className="bg-purple-50 p-3 rounded-lg">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-sm font-medium text-purple-700">
-                Progress to {nextMilestone.level}
-              </span>
-              <span className="text-sm font-medium text-purple-600">
-                {nextMilestone.current}/{nextMilestone.required} days
-              </span>
-            </div>
-            <div className="w-full bg-gray-200 rounded-full h-2 mb-2">
-              <div
-                className="bg-gradient-to-r from-purple-400 to-purple-600 h-2 rounded-full transition-all duration-500"
-                style={{ width: `${progressToMilestone}%` }}
-              ></div>
-            </div>
-            <div className="text-xs text-purple-600">
-              {nextMilestone.remaining > 0 ? (
-                <span>{nextMilestone.remaining} more consecutive days needed</span>
-              ) : (
-                <span className="font-medium">✅ Requirements met! Ready to upgrade</span>
-              )}
-            </div>
-          </div>
-        )}
 
         {/* Claim Status */}
         <div className="bg-blue-50 p-3 rounded-lg">
