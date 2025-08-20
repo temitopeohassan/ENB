@@ -13,9 +13,9 @@ interface UpgradeCardProps {
   profile: UserProfile;
   upgradeLoading: boolean;
   upgradeError: string | null;
-  onUpgrade: () => void;
-  onBuyENB: () => void;
-  onClearError: () => void;
+  onUpgradeAction: () => void;
+  onBuyENBAction: () => void;
+  onClearErrorAction: () => void;
   profileRefreshLoading?: boolean;
   profileRefreshSuccess?: boolean;
 }
@@ -24,9 +24,9 @@ export const UpgradeCard: React.FC<UpgradeCardProps> = ({
   profile,
   upgradeLoading,
   upgradeError,
-  onUpgrade,
-  onBuyENB,
-  onClearError,
+  onUpgradeAction,
+  onBuyENBAction,
+  onClearErrorAction,
   profileRefreshLoading = false,
   profileRefreshSuccess = false
 }) => {
@@ -74,7 +74,6 @@ export const UpgradeCard: React.FC<UpgradeCardProps> = ({
 
   const requirements = getUpgradeRequirements();
   const canUpgrade = requirements && consecutiveDays >= requirements.required;
-  const progress = requirements ? Math.min((consecutiveDays / requirements.required) * 100, 100) : 0;
 
   if (miningLoading && !miningActivity) {
     return (
@@ -155,40 +154,7 @@ export const UpgradeCard: React.FC<UpgradeCardProps> = ({
           </div>
         </div>
 
-        {/* Upgrade Progress */}
-        {requirements && (
-          <div className="bg-gray-50 p-4 rounded-lg">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-sm font-medium text-gray-700">
-                Progress to {requirements.nextLevel}
-              </span>
-              <span className="text-sm font-medium text-gray-600">
-                {consecutiveDays}/{requirements.required} days
-              </span>
-            </div>
-            
-            {/* Progress Bar */}
-            <div className="w-full bg-gray-200 rounded-full h-3 mb-2">
-              <div 
-                className={`bg-gradient-to-r from-${requirements.color}-400 to-${requirements.color}-600 h-3 rounded-full transition-all duration-500`}
-                style={{ width: `${progress}%` }}
-              ></div>
-            </div>
-            
-            {/* Progress Details */}
-            <div className="text-xs text-gray-500">
-              {consecutiveDays < requirements.required ? (
-                <span>
-                  {requirements.required - consecutiveDays} more consecutive days needed
-                </span>
-              ) : (
-                <span className="text-green-600 font-medium">
-                  ✅ Requirements met! Ready to upgrade
-                </span>
-              )}
-            </div>
-          </div>
-        )}
+
 
         {/* Next Milestone Progress (if available from mining activity) */}
         {nextMilestone && (
@@ -231,7 +197,7 @@ export const UpgradeCard: React.FC<UpgradeCardProps> = ({
               </div>
               <div className="ml-auto pl-3">
                 <button
-                  onClick={onClearError}
+                  onClick={onClearErrorAction}
                   className="inline-flex text-red-400 hover:text-red-600"
                 >
                   <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
@@ -247,7 +213,7 @@ export const UpgradeCard: React.FC<UpgradeCardProps> = ({
         {requirements ? (
           <button
             disabled={upgradeLoading || !canUpgrade}
-            onClick={onUpgrade}
+            onClick={onUpgradeAction}
             className={`w-full px-4 py-3 rounded-lg font-medium transition-colors ${
               canUpgrade && !upgradeLoading
                 ? 'bg-gradient-to-r from-purple-600 to-blue-600 text-white hover:from-purple-700 hover:to-blue-700 shadow-lg'
@@ -275,7 +241,7 @@ export const UpgradeCard: React.FC<UpgradeCardProps> = ({
       
       <div className="mt-6 pt-4 border-t border-gray-200">
         <button
-          onClick={onBuyENB}
+          onClick={onBuyENBAction}
           className="w-full px-4 py-3 bg-orange-600 text-white rounded-lg hover:bg-orange-700 disabled:opacity-60 transition-colors"
         >
           Buy $ENB
