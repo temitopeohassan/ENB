@@ -18,6 +18,20 @@ export default function App() {
   const [miniAppAdded, setMiniAppAdded] = useState(false);
   const [isCheckingMiniApp, setIsCheckingMiniApp] = useState(true);
   const frameConnector = useMemo(() => farcasterFrame(), []);
+  
+  // Simple notification state
+  const [notificationEnabled, setNotificationEnabled] = useState(false);
+  const [notificationToken, setNotificationToken] = useState<string | null>(null);
+  
+  // Function to enable notifications (for testing)
+  const enableNotifications = useCallback(() => {
+    // In a real app, this would be handled by the Neynar SDK
+    // For now, we'll simulate it with a test token
+    const testToken = `test-token-${Date.now()}`;
+    setNotificationToken(testToken);
+    setNotificationEnabled(true);
+    console.log('🔔 Notifications enabled with test token:', testToken);
+  }, []);
 
   // Check if mini app is already added
   useEffect(() => {
@@ -101,6 +115,61 @@ export default function App() {
     }
   }, []);
 
+  // Function to send notifications using Neynar API
+  const sendNotification = useCallback(async (title: string, body: string) => {
+    try {
+      // Check if we have notification token
+      if (notificationToken) {
+        console.log('📱 Notification token available:', notificationToken);
+        console.log('📋 Sending notification:', { title, body });
+        
+        // Prepare notification data
+        const notificationData = {
+          notificationId: `enb-${Date.now()}`,
+          title,
+          body,
+          targetUrl: window.location.href,
+          tokens: [notificationToken]
+        };
+        
+        console.log('📤 Notification payload:', notificationData);
+        
+        // Send notification via our API endpoint
+        try {
+          const apiResponse = await fetch('/api/send-notification', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(notificationData)
+          });
+          
+          if (apiResponse.ok) {
+            const result = await apiResponse.json();
+            console.log('✅ API response:', result);
+            // Show success feedback
+            console.log('✅ Notification sent successfully');
+          } else {
+            console.error('❌ API error:', apiResponse.status);
+          }
+        } catch (apiError) {
+          console.error('❌ API call failed:', apiError);
+        }
+        
+      } else {
+        console.warn('⚠️ Notifications not enabled or token not available');
+      }
+    } catch (error) {
+      console.error('❌ Failed to send notification:', error);
+    }
+  }, [notificationToken]);
+
+  // Function to send test notification
+  const sendTestNotification = useCallback(() => {
+    sendNotification(
+      'ENB Mini App Update', 
+      'Your daily mining rewards are ready to claim! 🎉'
+    );
+  }, [sendNotification]);
+
   const addButton = useMemo(() => {
     // Don't show anything while checking mini app status
     if (isCheckingMiniApp) {
@@ -114,7 +183,7 @@ export default function App() {
           <Icon name="check" size="sm" className="text-[#0052FF]" />
           <span>Added</span>
         </div>
-      );
+        );
     }
 
     // Show add button if mini app is not added
@@ -130,6 +199,47 @@ export default function App() {
       </Button>
     );
   }, [miniAppAdded, isCheckingMiniApp, handleAddMiniApp]);
+
+  // Notification status indicator
+  const notificationStatus = useMemo(() => {
+    if (notificationToken) {
+      return (
+        <div className="flex items-center space-x-2">
+          <div className="flex items-center space-x-1 text-sm font-medium text-green-600">
+            <Icon name="check" size="sm" className="text-green-600" />
+            <span>Notifications Enabled</span>
+          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={sendTestNotification}
+            className="text-blue-600 hover:text-blue-800 p-2"
+            icon={<Icon name="star" size="sm" />}
+          >
+            Test
+          </Button>
+        </div>
+      );
+    }
+
+    return (
+      <div className="flex items-center space-x-2">
+        <div className="flex items-center space-x-1 text-sm text-orange-600">
+          <Icon name="heart" size="sm" className="text-orange-600" />
+          <span>Notifications Disabled</span>
+        </div>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={enableNotifications}
+          className="text-orange-600 hover:text-orange-800 p-2"
+          icon={<Icon name="plus" size="sm" />}
+        >
+          Enable
+        </Button>
+      </div>
+    );
+  }, [notificationToken, sendTestNotification, enableNotifications]);
 
   const truncateAddress = (addr: string) => `${addr.slice(0, 6)}...${addr.slice(-4)}`;
 
@@ -179,6 +289,11 @@ export default function App() {
 
           <div className="flex items-center space-x-2">{addButton}</div>
 
+          {/* Notification Status */}
+          <div className="flex items-center space-x-2">
+            {notificationStatus}
+          </div>
+
           {address && (
             <div className="flex items-center space-x-2">
               <div className="px-3 py-1.5 bg-[var(--app-gray)] rounded-full text-sm font-medium">
@@ -192,6 +307,24 @@ export default function App() {
       <div className="w-full max-w-md mx-auto px-4 py-3 pt-20">
         <main className="flex-1">
           <TabNavigation />
+          
+          {/* Debug Information for Notifications */}
+          {process.env.NODE_ENV === 'development' && (
+            <div className="mb-6 p-4 bg-gray-100 rounded-lg text-xs">
+              <h3 className="font-semibold mb-2">🔍 Notification Debug Info</h3>
+              <div className="space-y-1">
+                <div>Notifications Enabled: {notificationEnabled ? '✅' : '❌'}</div>
+                <div>Notification Token: {notificationToken ? '✅' : '❌'}</div>
+                {notificationToken && (
+                  <div className="pl-4">
+                    <div>Token: {notificationToken.substring(0, 20)}...</div>
+                  </div>
+                )}
+                <div>Mini App Added: {miniAppAdded ? '✅' : '❌'}</div>
+              </div>
+            </div>
+          )}
+          
           {activeTab === "account" && <Account setActiveTabAction={setActiveTabAction} />}
           {activeTab === "create" && <Create setActiveTabAction={setActiveTabAction} />}
           {activeTab === "maintenance" && <Maintenance />}

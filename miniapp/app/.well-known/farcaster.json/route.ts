@@ -20,7 +20,7 @@ export async function GET() {
       buttonTitle: 'Start Mining',
       heroImageUrl:
         'https://enb-crushers.vercel.app/image.png',
-      webhookUrl: 'https://enb-crushers.vercel.app/api/webhook',
+      webhookUrl: 'https://api.neynar.com/f/app/d2fa4ec7-a35c-42b1-811e-2f576f09bab8/event',
       subtitle: 'Fast, Simple, Onchain',
       description: 'earn ENB daily on Farcaster',
       "screenshotUrls": [
@@ -42,7 +42,7 @@ export async function GET() {
         'https://enb-crushers.vercel.app/og-image.png',
       castShareUrl: 'https://enb-crushers.vercel.app/',
 "baseBuilder": {
-    "allowedAddresses": ["0x63526F05d9237DA102bce72960e13Ac4F2A3c3A9"
+    "allowedAddresses": ["0x63526F05d9237DA102bce72960e13Ac4F2A3c3A9"]
   },
     },
   };

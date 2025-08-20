@@ -218,9 +218,9 @@ export const Account: React.FC<AccountProps> = ({ setActiveTabAction }) => {
               }}
               upgradeLoading={upgradeLoading}
               upgradeError={upgradeError}
-              onUpgrade={handleUpgrade}
-              onBuyENB={handleBuyENB}
-              onClearError={() => setUpgradeError(null)}
+              onUpgradeAction={handleUpgrade}
+              onBuyENBAction={handleBuyENB}
+              onClearErrorAction={() => setUpgradeError(null)}
               profileRefreshLoading={profileRefreshLoading}
               profileRefreshSuccess={profileRefreshSuccess}
             />
