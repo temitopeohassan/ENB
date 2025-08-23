@@ -9,48 +9,65 @@ import { Maintenance } from "./components/Maintenance";
 import { useAccount, useConnect } from "wagmi";
 import { farcasterFrame } from '@farcaster/frame-wagmi-connector';
 import Image from "next/image";
-import { sdk } from "@farcaster/miniapp-sdk";
+import farcasterSDK from "@farcaster/miniapp-sdk";
 
 export default function App() {
   const { isConnected, address } = useAccount();
   const { connect } = useConnect();
   const [activeTab, setActiveTabAction] = useState("account");
-  const [miniAppAdded, setMiniAppAdded] = useState(false);
-  const [isCheckingMiniApp, setIsCheckingMiniApp] = useState(true);
   const frameConnector = useMemo(() => farcasterFrame(), []);
   
-  // Simple notification state
+  // Notification state
   const [notificationEnabled, setNotificationEnabled] = useState(false);
-  const [notificationToken, setNotificationToken] = useState<string | null>(null);
+  const [isCheckingStatus, setIsCheckingStatus] = useState(true);
   
-  // Function to enable notifications (for testing)
-  const enableNotifications = useCallback(() => {
-    // In a real app, this would be handled by the Neynar SDK
-    // For now, we'll simulate it with a test token
-    const testToken = `test-token-${Date.now()}`;
-    setNotificationToken(testToken);
-    setNotificationEnabled(true);
-    console.log('🔔 Notifications enabled with test token:', testToken);
-  }, []);
-
-  // Check if mini app is already added
+  // Check mini app status when app loads
   useEffect(() => {
     const checkMiniAppStatus = async () => {
       try {
-        setIsCheckingMiniApp(true);
-        // For now, we'll assume the mini app is not added
-        // The actual status will be determined when the user tries to add it
-        setMiniAppAdded(false);
+        setIsCheckingStatus(true);
+        
+        // Check if we're in a Farcaster mini app context
+        const isInMiniApp = await farcasterSDK.isInMiniApp();
+        
+        if (isInMiniApp) {
+          // We're in a Farcaster mini app context, so it's already added
+          setNotificationEnabled(true);
+          console.log("✅ Mini app is already added (detected via isInMiniApp)");
+        } else {
+          // Not in mini app context, check if we can access mini app actions
+          try {
+            // Try to call ready() - if it succeeds, the mini app might be added
+            await farcasterSDK.actions.ready();
+            
+            // If we get here, the mini app is likely added
+            setNotificationEnabled(true);
+            console.log("✅ Mini app appears to be already added (SDK ready)");
+            
+          } catch {
+            // SDK error suggests mini app is not added
+            setNotificationEnabled(false);
+            console.log("ℹ️ Mini app not added yet (SDK not ready)");
+          }
+        }
+        
       } catch (err) {
         console.error("Failed to check mini app status:", err);
-        setMiniAppAdded(false);
+        setNotificationEnabled(false);
       } finally {
-        setIsCheckingMiniApp(false);
+        setIsCheckingStatus(false);
       }
     };
 
     checkMiniAppStatus();
   }, []);
+
+  // Reset active tab to "account" when notifications are enabled
+  useEffect(() => {
+    if (notificationEnabled && !isCheckingStatus) {
+      setActiveTabAction("account");
+    }
+  }, [notificationEnabled, isCheckingStatus]);
 
   // Auto-connect wallet if not connected
   useEffect(() => {
@@ -74,17 +91,19 @@ export default function App() {
   // Notify Warpcast that the app is ready
   useEffect(() => {
     try {
-      sdk.actions.ready();
+      farcasterSDK.actions.ready();
     } catch (err) {
       console.error("Failed to signal Mini App readiness:", err);
     }
   }, []);
 
-  const handleAddMiniApp = useCallback(async () => {
+  const handleEnableNotifications = useCallback(async () => {
     try {
-      await sdk.actions.addMiniApp();
-      setMiniAppAdded(true);
-      console.log("✅ Mini app added successfully");
+      // Use the Farcaster mini app SDK to add the mini app
+      await farcasterSDK.actions.addMiniApp();
+      setNotificationEnabled(true);
+      console.log("Mini app added and notifications enabled successfully");
+      
     } catch (err: unknown) {
       console.log("🔍 Mini app add error details:", {
         error: err,
@@ -101,7 +120,7 @@ export default function App() {
         } else if (err.name === "AlreadyAdded" || err.message?.includes("already added")) {
           // Mini app is already added
           console.log("ℹ️ Mini app is already added");
-          setMiniAppAdded(true);
+          setNotificationEnabled(true);
         } else {
           console.error("Unknown error adding Mini App:", err.message);
         }
@@ -110,142 +129,50 @@ export default function App() {
       }
       // Keep the state as false if adding failed (unless it's already added)
       if (!(err instanceof Error && (err.name === "AlreadyAdded" || err.message?.includes("already added")))) {
-        setMiniAppAdded(false);
+        setNotificationEnabled(false);
       }
     }
   }, []);
 
-  // Function to send notifications using Neynar API
-  const sendNotification = useCallback(async (title: string, body: string) => {
-    try {
-      // Check if we have notification token
-      if (notificationToken) {
-        console.log('📱 Notification token available:', notificationToken);
-        console.log('📋 Sending notification:', { title, body });
-        
-        // Prepare notification data
-        const notificationData = {
-          notificationId: `enb-${Date.now()}`,
-          title,
-          body,
-          targetUrl: window.location.href,
-          tokens: [notificationToken]
-        };
-        
-        console.log('📤 Notification payload:', notificationData);
-        
-        // Send notification via our API endpoint
-        try {
-          const apiResponse = await fetch('/api/send-notification', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(notificationData)
-          });
-          
-          if (apiResponse.ok) {
-            const result = await apiResponse.json();
-            console.log('✅ API response:', result);
-            // Show success feedback
-            console.log('✅ Notification sent successfully');
-          } else {
-            console.error('❌ API error:', apiResponse.status);
-          }
-        } catch (apiError) {
-          console.error('❌ API call failed:', apiError);
-        }
-        
-      } else {
-        console.warn('⚠️ Notifications not enabled or token not available');
-      }
-    } catch (error) {
-      console.error('❌ Failed to send notification:', error);
-    }
-  }, [notificationToken]);
-
-  // Function to send test notification
-  const sendTestNotification = useCallback(() => {
-    sendNotification(
-      'ENB Mini App Update', 
-      'Your daily mining rewards are ready to claim! 🎉'
-    );
-  }, [sendNotification]);
-
-  const addButton = useMemo(() => {
-    // Don't show anything while checking mini app status
-    if (isCheckingMiniApp) {
+  // Notification status indicator - only show when notifications are disabled
+  const notificationStatus = useMemo(() => {
+    // Don't show anything while checking status
+    if (isCheckingStatus) {
       return null;
     }
 
-    // If mini app is already added, show the "Added" indicator
-    if (miniAppAdded) {
-      return (
-        <div className="flex items-center space-x-1 text-sm font-medium text-[#0052FF]">
-          <Icon name="check" size="sm" className="text-[#0052FF]" />
-          <span>Added</span>
-        </div>
-        );
-    }
-
-    // Show add button if mini app is not added
-    return (
-      <Button
-        variant="ghost"
-        size="sm"
-        onClick={handleAddMiniApp}
-        className="text-[var(--app-accent)] p-4"
-        icon={<Icon name="plus" size="sm" />}
-      >
-        Add Mini App
-      </Button>
-    );
-  }, [miniAppAdded, isCheckingMiniApp, handleAddMiniApp]);
-
-  // Notification status indicator
-  const notificationStatus = useMemo(() => {
-    if (notificationToken) {
+    if (!notificationEnabled) {
       return (
         <div className="flex items-center space-x-2">
-          <div className="flex items-center space-x-1 text-sm font-medium text-green-600">
-            <Icon name="check" size="sm" className="text-green-600" />
-            <span>Notifications Enabled</span>
+          <div className="flex items-center space-x-1 text-sm text-orange-600">
+            <Icon name="heart" size="sm" className="text-orange-600" />
+            <span>Notifications Disabled</span>
           </div>
           <Button
             variant="ghost"
             size="sm"
-            onClick={sendTestNotification}
-            className="text-blue-600 hover:text-blue-800 p-2"
-            icon={<Icon name="star" size="sm" />}
+            onClick={handleEnableNotifications}
+            className="text-orange-600 hover:text-orange-800 p-2"
+            icon={<Icon name="plus" size="sm" />}
           >
-            Test
+            Enable
           </Button>
         </div>
       );
     }
 
-    return (
-      <div className="flex items-center space-x-2">
-        <div className="flex items-center space-x-1 text-sm text-orange-600">
-          <Icon name="heart" size="sm" className="text-orange-600" />
-          <span>Notifications Disabled</span>
-        </div>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={enableNotifications}
-          className="text-orange-600 hover:text-orange-800 p-2"
-          icon={<Icon name="plus" size="sm" />}
-        >
-          Enable
-        </Button>
-      </div>
-    );
-  }, [notificationToken, sendTestNotification, enableNotifications]);
+    // Show nothing when notifications are enabled
+    return null;
+  }, [notificationEnabled, isCheckingStatus, handleEnableNotifications]);
 
   const truncateAddress = (addr: string) => `${addr.slice(0, 6)}...${addr.slice(-4)}`;
 
   // Tab navigation component
   const TabNavigation = () => {
-    if (!isConnected) return null;
+    // Don't show tabs if not connected or if notifications are not enabled
+    if (!isConnected || !notificationEnabled || isCheckingStatus) {
+      return null;
+    }
 
     const tabs = [
       { id: "account", label: "Account", icon: "user" },
@@ -287,9 +214,7 @@ export default function App() {
             <h1 className="text-xl font-bold">ENB MINI APP</h1>
           </div>
 
-          <div className="flex items-center space-x-2">{addButton}</div>
-
-          {/* Notification Status */}
+          {/* Notification Status - only show when disabled */}
           <div className="flex items-center space-x-2">
             {notificationStatus}
           </div>
@@ -313,21 +238,38 @@ export default function App() {
             <div className="mb-6 p-4 bg-gray-100 rounded-lg text-xs">
               <h3 className="font-semibold mb-2">🔍 Notification Debug Info</h3>
               <div className="space-y-1">
-                <div>Notifications Enabled: {notificationEnabled ? '✅' : '❌'}</div>
-                <div>Notification Token: {notificationToken ? '✅' : '❌'}</div>
-                {notificationToken && (
-                  <div className="pl-4">
-                    <div>Token: {notificationToken.substring(0, 20)}...</div>
-                  </div>
-                )}
-                <div>Mini App Added: {miniAppAdded ? '✅' : '❌'}</div>
+                <div>Status Checking: {isCheckingStatus ? '⏳ Checking...' : '✅ Complete'}</div>
+                <div>Notifications Enabled: {notificationEnabled ? '✅ Yes' : '❌ No'}</div>
+                <div>Mini App SDK Ready: ✅</div>
+                <div>Farcaster SDK Import: ✅</div>
+                <div>Tab Navigation: {(!isConnected || !notificationEnabled || isCheckingStatus) ? '❌ Hidden' : '✅ Visible'}</div>
+                <div>Active Tab: {activeTab}</div>
+                <div>Wallet Connected: {isConnected ? '✅ Yes' : '❌ No'}</div>
               </div>
             </div>
           )}
           
-          {activeTab === "account" && <Account setActiveTabAction={setActiveTabAction} />}
-          {activeTab === "create" && <Create setActiveTabAction={setActiveTabAction} />}
-          {activeTab === "maintenance" && <Maintenance />}
+          {/* Show content only when notifications are enabled */}
+          {notificationEnabled && !isCheckingStatus ? (
+            <>
+              {activeTab === "account" && <Account setActiveTabAction={setActiveTabAction} />}
+              {activeTab === "create" && <Create setActiveTabAction={setActiveTabAction} />}
+              {activeTab === "maintenance" && <Maintenance />}
+            </>
+          ) : (
+            /* Show message when notifications are not enabled */
+            <div className="flex flex-col items-center justify-center py-20 text-center">
+              <div className="mb-6">
+                <Icon name="heart" size="lg" className="text-orange-500 mx-auto mb-4" />
+                <h2 className="text-xl font-semibold text-gray-800 mb-2">
+                  Enable Notifications
+                </h2>
+                <p className="text-gray-600 max-w-sm">
+                  To access the ENB Mini App features, please enable notifications by clicking the &quot;Enable&quot; button in the header.
+                </p>
+              </div>
+            </div>
+          )}
         </main>
 
         <footer className="mt-2 pt-4 flex justify-center">ENB Mini App</footer>

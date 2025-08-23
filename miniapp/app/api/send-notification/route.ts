@@ -22,19 +22,27 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Prepare notification payload for Neynar API
+    // Prepare notification payload for Neynar Frame Notifications API
     const notificationPayload = {
-      notification_id: notificationId,
-      title,
-      body: messageBody,
-      target_url: targetUrl,
-      tokens,
+      target_fids: [], // Empty array means target all users with notifications enabled
+      notification: {
+        title,
+        body: messageBody,
+        target_url: targetUrl,
+      },
+      // Optional filters
+      filters: {
+        // You can add filters here if needed
+        // exclude_fids: [],
+        // minimum_user_score: 0.5,
+        // following_fid: 3,
+      }
     };
 
-    console.log('📤 Sending notification to Neynar:', notificationPayload);
+    console.log('📤 Sending notification to Neynar Frame API:', notificationPayload);
 
-    // Send notification via Neynar API
-    const response = await fetch('https://api.neynar.com/v2/farcaster/notification', {
+    // Send notification via Neynar Frame Notifications API
+    const response = await fetch('https://api.neynar.com/v2/farcaster/frame/notifications', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -45,7 +53,7 @@ export async function POST(request: NextRequest) {
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('❌ Neynar API error:', response.status, errorText);
+      console.error('❌ Neynar Frame API error:', response.status, errorText);
       return NextResponse.json(
         { error: `Failed to send notification: ${response.status}` },
         { status: response.status }
