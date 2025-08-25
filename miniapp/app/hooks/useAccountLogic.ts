@@ -6,7 +6,7 @@ import { ENB_TOKEN_ABI, ENB_TOKEN_ADDRESS } from '../constants/enbMiniAppAbi';
 import { API_BASE_URL } from '../config';
 import { createPublicClient, http } from 'viem';
 import { base } from 'viem/chains';
-import { sdk } from '@farcaster/miniapp-sdk';
+import { sdk } from '@farcaster/frame-sdk';
 import { UserProfile, ClaimStatus, TipStep } from '../types/account';
 
 export const useAccountLogic = () => {
@@ -235,80 +235,59 @@ export const useAccountLogic = () => {
   };
 
   const handleDailyClaimWarpcastShare = async () => {
-  const getEnbAmount = (level: string) => {
-    switch (level) {
-      case 'Based': return 10;
-      case 'Super Based': return 15;
-      case 'Legendary': return 20;
-      default: return 10;
+    const getEnbAmount = (level: string) => {
+      switch (level) {
+        case 'Based': return 10;
+        case 'Super Based': return 15;
+        case 'Legendary': return 20;
+        default: return 10;
+      }
+    };
+
+    const enbAmount = getEnbAmount(profile?.membershipLevel || 'Based');
+    
+    try {
+      await sdk.actions.composeCast({
+        text: `I just claimed my daily ${enbAmount} $ENB rewards as a ${profile?.membershipLevel} member! Join me and start earning now! ${profile?.invitationCode}`,
+        embeds: ["https://enb-crushers.vercel.app"]
+      });
+      
+      // Also trigger mining activity refresh after sharing
+      await refreshMiningActivity();
+    } catch (error) {
+      console.error('Error sharing daily claim:', error);
     }
   };
 
-  const enbAmount = getEnbAmount(profile?.membershipLevel || 'Based');
-  const appUrl = "https://enb-crushers.vercel.app";
+  const handleUpgradeWarpcastShare = async () => {
+    try {
+      await sdk.actions.composeCast({
+        text: "I just upgraded my mining account to increase my daily earnings! Join me and start earning NOW!",
+        embeds: ["https://enb-crushers.vercel.app"]
+      });
+      
+      // Also trigger mining activity refresh after sharing
+      await refreshMiningActivity();
+    } catch (error) {
+      console.error('Error sharing upgrade:', error);
+    }
+  };
 
-  try {
-    // Open the cast composer with the daily claim message
-    await sdk.actions.composeCast({
-      text: `I just claimed my daily ${enbAmount} $ENB rewards as a ${profile?.membershipLevel} member! Join me and start earning now! ${profile?.invitationCode}`,
-      embeds: [appUrl],
-    });
-
-    // Always open the mini app afterwards
-    await sdk.actions.openMiniApp({ url: appUrl });
-
-  } catch (error) {
-    console.error("Error sharing daily claim or opening mini app:", error);
-  }
-
-  // Refresh mining activity at the end
-  await refreshMiningActivity();
-};
-
-
-const handleUpgradeWarpcastShare = async () => {
-  const appUrl = "https://enb-crushers.vercel.app";
-
-  try {
-    // Open the cast composer with the app embed
-    await sdk.actions.composeCast({
-      text: "I just upgraded my mining account to increase my daily earnings! Join me and start earning NOW!",
-      embeds: [appUrl],
-    });
-
-    // Always open the mini app afterwards
-    await sdk.actions.openMiniApp({ url: appUrl });
-
-    // Refresh mining activity after sharing + opening
+  const handleInvitationCode = async () => {
+    if (!profile?.invitationCode) return;
+    
+    try {
+      await sdk.actions.composeCast({
+        text: `Join me on ENB Mining! Use my invitation code: ${profile.invitationCode}\n\nMine daily rewards and upgrade your membership level. Start your journey today! 🚀\n\n#ENBMining #Web3 #Mining`,
+        embeds: ["https://enb-crushers.vercel.app"]
+      });
+    } catch (error) {
+      console.error('Error sharing invitation code:', error);
+    }
+    
+    // Also trigger mining activity refresh
     await refreshMiningActivity();
-  } catch (error) {
-    console.error("Error sharing upgrade or opening mini app:", error);
-  }
-};
-
-
- const handleInvitationCode = async () => {
-  if (!profile?.invitationCode) return;
-
-  const appUrl = "https://enb-crushers.vercel.app";
-
-  try {
-    // Open the cast composer (don’t care about return value)
-    await sdk.actions.composeCast({
-      text: `Join me on ENB Mining! Use my invitation code: ${profile.invitationCode}\n\nMine daily rewards and upgrade your membership level. Start your journey today! 🚀\n\n#ENBMining #Web3 #Mining`,
-      embeds: [appUrl],
-    });
-
-    // Always open the mini app
-    await sdk.actions.openMiniApp({ url: appUrl });
-
-  } catch (error) {
-    console.error("Error composing cast or opening mini app:", error);
-  }
-
-  await refreshMiningActivity();
-};
-
+  };
 
   const handleBuyENB = async () => {
     const url = "https://wallet.coinbase.com/post/0x942862cba4a0f04ebe119bafd494eba55bc7164f";
