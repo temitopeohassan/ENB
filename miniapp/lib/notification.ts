@@ -1,5 +1,5 @@
-import type { MiniAppNotificationDetails } from "./miniapp-notification";
-import { getRedis } from "./redis";
+import type { FrameNotificationDetails } from "@farcaster/frame-sdk";
+import { redis } from "./redis";
 
 const notificationServiceKey =
   process.env.NEXT_PUBLIC_ONCHAINKIT_PROJECT_NAME ?? "minikit";
@@ -10,22 +10,20 @@ function getUserNotificationDetailsKey(fid: number): string {
 
 export async function getUserNotificationDetails(
   fid: number,
-): Promise<MiniAppNotificationDetails | null> {
-  const redis = getRedis();
+): Promise<FrameNotificationDetails | null> {
   if (!redis) {
     return null;
   }
 
-  return await redis.get<MiniAppNotificationDetails>(
+  return await redis.get<FrameNotificationDetails>(
     getUserNotificationDetailsKey(fid),
   );
 }
 
 export async function setUserNotificationDetails(
   fid: number,
-  notificationDetails: MiniAppNotificationDetails,
+  notificationDetails: FrameNotificationDetails,
 ): Promise<void> {
-  const redis = getRedis();
   if (!redis) {
     return;
   }
@@ -36,8 +34,7 @@ export async function setUserNotificationDetails(
 export async function deleteUserNotificationDetails(
   fid: number,
 ): Promise<void> {
-  const redis = getRedis();
-    if (!redis) {
+  if (!redis) {
     return;
   }
 
