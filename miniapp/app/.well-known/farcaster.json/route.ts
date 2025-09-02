@@ -42,7 +42,7 @@ export async function GET() {
         'https://enb-crushers.vercel.app/og-image.png',
       castShareUrl: 'https://enb-crushers.vercel.app/',
     },
-   "baseBuilder": {
+   baseBuilder: {
     "allowedAddresses": ["0x63526F05d9237DA102bce72960e13Ac4F2A3c3A9"]
     },
   };
