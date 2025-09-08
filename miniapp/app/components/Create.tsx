@@ -16,10 +16,7 @@ import { Button } from "./Button";
 import { Icon } from "./Icon";
 import { sdk } from '@farcaster/frame-sdk';
 
-interface User {
-  walletAddress: string;
-  isActivated: boolean;
-}
+
 
 interface CreateProps {
   setActiveTabAction: (tab: string) => void;
@@ -51,35 +48,34 @@ export const Create: React.FC<CreateProps> = ({ setActiveTabAction }) => {
       }
 
       try {
-        console.log('📤 Fetching users from API...');
-        const response = await fetch(`${API_BASE_URL}/api/users?limit=1000`);
-        console.log('📥 Users response status:', response.status);
-        
-        if (!response.ok) {
-          console.error('❌ Failed to fetch users:', response.status);
-          throw new Error('Failed to fetch users');
+        console.log('📤 Fetching profile from API...');
+        const response = await fetch(`${API_BASE_URL}/api/profile/${address}`);
+        console.log('📥 Profile response status:', response.status);
+
+        if (response.status === 404) {
+          console.log('🆕 No existing account found for this wallet');
+          setAccountCreated(false);
+          setHasUnactivatedAccount(false);
+          return;
         }
 
-        const data = await response.json();
-        console.log('📋 Users data received, total users:', data.users?.length || 0);
-        
-        const user = data.users.find((u: User) =>
-          u.walletAddress.toLowerCase() === address.toLowerCase()
-        );
-        
-        console.log('🔍 User search result:', user ? 'Found' : 'Not found');
-        console.log('📋 User details:', user);
+        if (!response.ok) {
+          const err = await response.json().catch(() => ({}));
+          console.error('❌ Failed to fetch profile:', err);
+          throw new Error(err.error || 'Failed to fetch profile');
+        }
 
-        if (user) {
-          if (user.isActivated) {
-            console.log('✅ User account is activated');
-            setAccountCreated(true);
-          } else {
-            console.log('⚠️ User account exists but not activated');
-            setHasUnactivatedAccount(true);
-          }
+        const profile = await response.json();
+        console.log('📋 Profile data received:', profile);
+
+        if (profile.isActivated) {
+          console.log('✅ User account is activated');
+          setAccountCreated(true);
+          setHasUnactivatedAccount(false);
         } else {
-          console.log('🆕 No existing account found');
+          console.log('⚠️ User account exists but not activated');
+          setAccountCreated(true);
+          setHasUnactivatedAccount(true);
         }
       } catch (error) {
         console.error('❌ Error checking account:', error);
@@ -171,6 +167,11 @@ export const Create: React.FC<CreateProps> = ({ setActiveTabAction }) => {
         });
         console.log('✅ Transaction sent via wagmi, hash:', txHash);
       }
+
+      // Wait for blockchain confirmation
+      console.log('⏳ Waiting for transaction confirmation...');
+      const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
+      console.log('✅ Transaction confirmed in block:', receipt.blockNumber);
 
       // Sync with backend
       console.log('🔄 Syncing with backend...');
