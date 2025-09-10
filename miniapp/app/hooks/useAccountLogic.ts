@@ -2,12 +2,14 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useAccount } from 'wagmi';
-import { ENB_TOKEN_ABI, ENB_TOKEN_ADDRESS } from '../constants/enbMiniAppAbi';
+import { ENB_TOKEN_ABI, ENB_TOKEN_ADDRESS, ENB_MINI_APP_ADDRESS } from '../constants/enbMiniAppAbi';
 import { API_BASE_URL } from '../config';
 import { createPublicClient, http } from 'viem';
 import { base } from 'viem/chains';
 import { sdk } from '@farcaster/miniapp-sdk';
+import { ethers } from 'ethers';
 import { UserProfile, ClaimStatus, TipStep } from '../types/account';
+
 
 export const useAccountLogic = () => {
   const { address } = useAccount();
@@ -22,6 +24,7 @@ export const useAccountLogic = () => {
   const [loading, setLoading] = useState(true);
   const [dailyClaimLoading, setDailyClaimLoading] = useState(false);
   const [upgradeLoading, setUpgradeLoading] = useState(false);
+  const [approvalLoading, setApprovalLoading] = useState(false);
   const [profileRefreshLoading, setProfileRefreshLoading] = useState(false);
   const [profileRefreshSuccess, setProfileRefreshSuccess] = useState(false);
   const [profile, setProfile] = useState<UserProfile | null>(null);
@@ -152,6 +155,7 @@ export const useAccountLogic = () => {
       const res = await fetch(`${API_BASE_URL}/api/profile/${address}`);
       if (res.ok) {
         const updated = await res.json();
+        console.log('📊 Profile data refreshed:', updated);
         setProfile(updated);
         await updateClaimStatus();
         setProfileRefreshSuccess(true);
@@ -159,6 +163,8 @@ export const useAccountLogic = () => {
         
         // Also trigger mining activity refresh
         await refreshMiningActivity();
+      } else {
+        console.error('❌ Failed to refresh profile:', res.status, res.statusText);
       }
     } catch {
       console.error('Error refreshing profile');
@@ -329,12 +335,6 @@ const handleUpgradeWarpcastShare = async () => {
       return;
     }
 
-    const requiredDays = profile.membershipLevel === 'Based' ? 14 : 28;
-    if (profile.consecutiveDays < requiredDays) {
-      alert(`You need ${requiredDays} consecutive days to upgrade. Current: ${profile.consecutiveDays}`);
-      return;
-    }
-
     setUpgradeLoading(true);
     try {
       let targetLevel;
@@ -342,6 +342,58 @@ const handleUpgradeWarpcastShare = async () => {
         case 'Based': targetLevel = 1; break;
         case 'Super Based': targetLevel = 2; break;
         default: alert('You are already at the highest level!'); return;
+      }
+
+      // First, check if we need to approve tokens
+      const upgradeCosts: { [key: number]: number } = {
+        0: 0,      // Based (no cost)
+        1: 30000,  // SuperBased: 30,000 ENB
+        2: 60000   // Legendary: 60,000 ENB
+      };
+
+      const requiredTokens = upgradeCosts[targetLevel] || 0;
+      if (requiredTokens > 0) {
+        // Check current allowance
+        const allowance = await publicClient.readContract({
+          address: ENB_TOKEN_ADDRESS as `0x${string}`,
+          abi: ENB_TOKEN_ABI,
+          functionName: 'allowance',
+          args: [address as `0x${string}`, ENB_MINI_APP_ADDRESS as `0x${string}`]
+        }) as bigint;
+
+        const requiredTokensWei = BigInt(requiredTokens) * BigInt(10 ** 18);
+        
+        if (allowance < requiredTokensWei) {
+          // Need to approve tokens first
+          setApprovalLoading(true);
+          try {
+            const approvalAmount = requiredTokensWei;
+            
+            // Request approval transaction using Farcaster SDK wallet
+            if (!sdk.wallet.ethProvider) {
+              throw new Error('No wallet found. Please connect your wallet through Farcaster.');
+            }
+            
+            const approvalTx = await sdk.wallet.ethProvider.request({
+              method: 'eth_sendTransaction',
+              params: [{
+                from: address,
+                to: ENB_TOKEN_ADDRESS,
+                data: new ethers.Interface([
+                  'function approve(address spender, uint256 amount) returns (bool)'
+                ]).encodeFunctionData('approve', [
+                  ENB_MINI_APP_ADDRESS,
+                  `0x${approvalAmount.toString(16)}`
+                ]) as `0x${string}`
+              }]
+            });
+
+            // Wait for approval confirmation
+            await publicClient.waitForTransactionReceipt({ hash: approvalTx as `0x${string}` });
+          } finally {
+            setApprovalLoading(false);
+          }
+        }
       }
 
       const res = await fetch(`${API_BASE_URL}/relay/upgrade-membership`, {
@@ -356,7 +408,11 @@ const handleUpgradeWarpcastShare = async () => {
         throw new Error(data.error || 'Upgrade failed');
       }
 
+      console.log('✅ Upgrade successful:', data);
       setShowUpgradeModal(true);
+      
+      // Refresh profile data to get updated membership level
+      console.log('🔄 Refreshing profile after upgrade...');
       await refreshProfile();
       
       // Also trigger mining activity refresh
@@ -379,6 +435,8 @@ const handleUpgradeWarpcastShare = async () => {
         setUpgradeError('You are already at the maximum membership level.');
       } else if (errorMessage.includes('CannotSkipLevels')) {
         setUpgradeError('Cannot skip membership levels. Must upgrade sequentially.');
+      } else if (errorMessage.includes('InsufficientAllowance')) {
+        setUpgradeError('Insufficient token allowance. Please approve more ENB tokens for the upgrade.');
       } else {
         setUpgradeError(errorMessage);
       }
@@ -493,22 +551,10 @@ const handleUpgradeWarpcastShare = async () => {
   useEffect(() => {
     if (address) {
       updateClaimStatus();
-      const syncInterval = setInterval(() => {
-        updateClaimStatus();
-      }, 30000);
-      return () => clearInterval(syncInterval);
     }
   }, [address, updateClaimStatus]);
 
-  // Periodic profile refresh to keep consecutive days data current
-  useEffect(() => {
-    if (address && profile) {
-      const profileSyncInterval = setInterval(() => {
-        refreshProfile();
-      }, 60000); // Refresh profile every minute
-      return () => clearInterval(profileSyncInterval);
-    }
-  }, [address, profile, refreshProfile]);
+  // Profile refresh is now manual only - no automatic polling
 
   // Tips logic
   const handleNextTip = () => {
@@ -559,6 +605,7 @@ const handleUpgradeWarpcastShare = async () => {
     claimStatus,
     dailyClaimLoading,
     upgradeLoading,
+    approvalLoading,
     upgradeError,
     profileRefreshLoading,
     profileRefreshSuccess,

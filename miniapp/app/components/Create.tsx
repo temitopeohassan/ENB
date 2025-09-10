@@ -58,7 +58,7 @@ export const Create: React.FC<CreateProps> = ({ setActiveTabAction }) => {
           setHasUnactivatedAccount(false);
           return;
         }
-
+        
         if (!response.ok) {
           const err = await response.json().catch(() => ({}));
           console.error('❌ Failed to fetch profile:', err);
@@ -69,13 +69,13 @@ export const Create: React.FC<CreateProps> = ({ setActiveTabAction }) => {
         console.log('📋 Profile data received:', profile);
 
         if (profile.isActivated) {
-          console.log('✅ User account is activated');
-          setAccountCreated(true);
+            console.log('✅ User account is activated');
+            setAccountCreated(true);
           setHasUnactivatedAccount(false);
-        } else {
-          console.log('⚠️ User account exists but not activated');
+          } else {
+            console.log('⚠️ User account exists but not activated');
           setAccountCreated(true);
-          setHasUnactivatedAccount(true);
+            setHasUnactivatedAccount(true);
         }
       } catch (error) {
         console.error('❌ Error checking account:', error);
@@ -280,11 +280,7 @@ export const Create: React.FC<CreateProps> = ({ setActiveTabAction }) => {
       setHasUnactivatedAccount(false);
       setActivationCode('');
       
-      // Force a profile refresh by triggering a page reload
-      // This ensures the Account component shows updated invite usage data
-      setTimeout(() => {
-        window.location.reload();
-      }, 2000); // Wait 2 seconds for modal to be visible
+      // Account activation successful - user can manually refresh to see updated data
     } catch (error) {
       console.error('❌ Activation failed:', error);
       const errorMessage = error instanceof Error 
