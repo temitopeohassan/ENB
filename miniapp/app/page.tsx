@@ -16,6 +16,7 @@ export default function App() {
   const { connect } = useConnect();
   const [activeTab, setActiveTabAction] = useState("account");
   const [miniAppAdded, setMiniAppAdded] = useState(false);
+  const [fid, setFid] = useState<number | null>(null);
   const frameConnector = useMemo(() => farcasterFrame(), []);
 
   /** Auto-connect wallet if not connected */
@@ -36,15 +37,34 @@ export default function App() {
     autoConnect();
   }, [isConnected, connect, frameConnector]);
 
-  /** Check on load whether Mini App is already added (SDK + localStorage fallback) */
+  /** Check on load whether Mini App is already added (SDK + localStorage fallback) and capture fid */
   useEffect(() => {
     (async () => {
       try {
         const context = await sdk.context;
-        if (context?.client?.added === true) {
-          setMiniAppAdded(true);
-          localStorage.setItem("miniAppAdded", "true");
-          return;
+
+        const isRecord = (obj: unknown): obj is Record<string, unknown> =>
+          typeof obj === "object" && obj !== null && !Array.isArray(obj);
+
+        // Check if mini app is added
+        if (isRecord(context)) {
+          const clientVal = context["client"];
+          if (isRecord(clientVal) && clientVal["added"] === true) {
+            setMiniAppAdded(true);
+            localStorage.setItem("miniAppAdded", "true");
+          }
+        }
+
+        // Capture fid if available
+        let foundFid: number | null = null;
+        if (isRecord(context)) {
+          const userVal = context["user"];
+          if (isRecord(userVal) && typeof userVal["fid"] === "number") {
+            foundFid = userVal["fid"] as number;
+          }
+        }
+        if (typeof foundFid === "number") {
+          setFid(foundFid);
         }
       } catch (err) {
         console.error("Failed to fetch context, falling back to localStorage", err);
@@ -62,6 +82,13 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem("miniAppAdded", String(miniAppAdded));
   }, [miniAppAdded]);
+
+  /** Log FID when Mini App is added */
+  useEffect(() => {
+    if (miniAppAdded && typeof fid === "number") {
+      console.log("Mini App added for FID:", fid);
+    }
+  }, [miniAppAdded, fid]);
 
   /** Notify Warpcast the app is ready */
   useEffect(() => {
@@ -91,6 +118,8 @@ export default function App() {
       }
     }
   }, []);
+
+  // Removed test notification handler
 
   /** Utility: truncate address */
   const truncateAddress = (addr: string) =>
@@ -123,6 +152,8 @@ export default function App() {
               Add Mini App
             </Button>
           )}
+
+          {/* Test Notification button removed */}
 
           {address && (
             <div className="flex items-center space-x-2">

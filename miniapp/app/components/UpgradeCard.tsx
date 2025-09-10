@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useMiningActivity } from '../hooks/useMiningActivity';
 
 interface UserProfile {
@@ -12,6 +12,7 @@ interface UserProfile {
 interface UpgradeCardProps {
   profile: UserProfile;
   upgradeLoading: boolean;
+  approvalLoading: boolean;
   upgradeError: string | null;
   onUpgradeAction: () => void;
   onBuyENBAction: () => void;
@@ -23,6 +24,7 @@ interface UpgradeCardProps {
 export const UpgradeCard: React.FC<UpgradeCardProps> = ({
   profile,
   upgradeLoading,
+  approvalLoading,
   upgradeError,
   onUpgradeAction,
   onBuyENBAction,
@@ -30,6 +32,15 @@ export const UpgradeCard: React.FC<UpgradeCardProps> = ({
   profileRefreshLoading = false,
   profileRefreshSuccess = false
 }) => {
+  console.log('UpgradeCard: Component rendered with props:', {
+    profile,
+    upgradeLoading,
+    approvalLoading,
+    upgradeError,
+    profileRefreshLoading,
+    profileRefreshSuccess
+  });
+
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
 
   // Use the new mining activity hook for accurate data
@@ -42,10 +53,20 @@ export const UpgradeCard: React.FC<UpgradeCardProps> = ({
                 refresh: refreshMining
               } = useMiningActivity(profile.walletAddress);
 
-  // Update refresh timestamp when profile or mining activity changes
-  useEffect(() => {
+  console.log('UpgradeCard: Mining activity data:', {
+    miningActivity,
+    miningLoading,
+    miningError,
+    miningRefreshing,
+    miningRefreshSuccess
+  });
+
+  // Update refresh timestamp only when manually refreshed
+  const handleManualRefresh = () => {
+    console.log('UpgradeCard: Manual refresh triggered');
     setLastRefresh(new Date());
-  }, [profile.consecutiveDays, profile.membershipLevel, miningActivity?.consecutiveDays]);
+    refreshMining();
+  };
 
   // Use mining activity data if available, fallback to profile data
   const consecutiveDays = miningActivity?.consecutiveDays ?? profile.consecutiveDays;
@@ -53,29 +74,52 @@ export const UpgradeCard: React.FC<UpgradeCardProps> = ({
   const nextMilestone = miningActivity?.nextMilestone;
   const progressToMilestone = miningActivity?.progressToMilestone ?? 0;
 
+  console.log('UpgradeCard: Computed values:', {
+    consecutiveDays,
+    membershipLevel,
+    nextMilestone,
+    progressToMilestone
+  });
+
   const getUpgradeRequirements = () => {
+    console.log('UpgradeCard: getUpgradeRequirements called with membershipLevel:', membershipLevel);
+    
     if (membershipLevel === 'Based') {
-      return {
+      const req = {
         current: consecutiveDays,
         required: 14,
         nextLevel: 'Super Based',
         color: 'blue'
       };
+      console.log('UpgradeCard: Based level requirements:', req);
+      return req;
     } else if (membershipLevel === 'Super Based') {
-      return {
+      const req = {
         current: consecutiveDays,
         required: 28,
         nextLevel: 'Legendary',
         color: 'purple'
       };
+      console.log('UpgradeCard: Super Based level requirements:', req);
+      return req;
     }
+    console.log('UpgradeCard: No upgrade requirements (max level reached)');
     return null;
   };
 
   const requirements = getUpgradeRequirements();
   const canUpgrade = requirements && consecutiveDays >= requirements.required;
 
+  console.log('UpgradeCard: Final requirements and canUpgrade:', {
+    requirements,
+    canUpgrade,
+    consecutiveDays,
+    membershipLevel,
+    hasMetRequirements: requirements ? consecutiveDays >= requirements.required : false
+  });
+
   if (miningLoading && !miningActivity) {
+    console.log('UpgradeCard: Rendering loading state');
     return (
       <div className="bg-white p-6 rounded-lg shadow-md border">
         <div className="flex items-center justify-center py-8">
@@ -86,6 +130,7 @@ export const UpgradeCard: React.FC<UpgradeCardProps> = ({
   }
 
   if (miningError && !miningActivity) {
+    console.log('UpgradeCard: Rendering error state with error:', miningError);
     return (
       <div className="bg-white p-6 rounded-lg shadow-md border">
         <div className="text-center py-8">
@@ -102,6 +147,8 @@ export const UpgradeCard: React.FC<UpgradeCardProps> = ({
     );
   }
 
+  console.log('UpgradeCard: Rendering main component');
+  
   return (
     <div id="upgrade-section" className="bg-white p-6 rounded-lg shadow-md border">
       <div className="flex items-center justify-between mb-4">
@@ -117,7 +164,7 @@ export const UpgradeCard: React.FC<UpgradeCardProps> = ({
             <div className="text-green-500 text-xs">✓ Updated</div>
           )}
           <button
-            onClick={refreshMining}
+            onClick={handleManualRefresh}
             disabled={miningRefreshing}
             className={`text-xs transition-colors ${
               miningRefreshing 
@@ -154,12 +201,58 @@ export const UpgradeCard: React.FC<UpgradeCardProps> = ({
           </div>
         </div>
 
+        {/* Upgrade Progress (for users who haven't met requirements yet) */}
+        {requirements && !canUpgrade && (
+          <div className="bg-orange-50 border border-orange-200 text-orange-700 px-4 py-3 rounded-lg">
+            <div className="flex items-start">
+              <div className="flex-shrink-0">
+                <svg className="h-5 w-5 text-orange-400" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
+                </svg>
+              </div>
+              <div className="ml-3 flex-1">
+                <p className="text-sm font-medium">Upgrade Progress to {requirements.nextLevel}</p>
+                <div className="mt-2">
+                  <div className="flex justify-between text-sm mb-1">
+                    <span>Consecutive Days</span>
+                    <span>{requirements.current}/{requirements.required}</span>
+                  </div>
+                  <div className="w-full bg-orange-200 rounded-full h-2">
+                    <div
+                      className={`bg-gradient-to-r from-orange-400 to-orange-600 h-2 rounded-full transition-all duration-500`}
+                      style={{ width: `${Math.min((requirements.current / requirements.required) * 100, 100)}%` }}
+                    ></div>
+                  </div>
+                  <p className="text-xs mt-2">
+                    {requirements.required - requirements.current > 0 ? (
+                      <span>You need {requirements.required - requirements.current} more consecutive days to upgrade</span>
+                    ) : (
+                      <span className="font-medium">✅ Requirements met! Ready to upgrade</span>
+                    )}
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
+        {/* Approval Loading Message */}
+        {approvalLoading && (
+          <div className="bg-yellow-50 border border-yellow-200 text-yellow-700 px-4 py-3 rounded-lg">
+            <div className="flex items-center">
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-yellow-600 mr-2"></div>
+              <span className="text-sm font-medium">Approving ENB tokens...</span>
+            </div>
+            <p className="text-xs mt-1">Please confirm the approval transaction in your wallet.</p>
+          </div>
+        )}
 
         {/* Next Milestone Progress (if available from mining activity) */}
-        {nextMilestone && (
-          <div className="bg-purple-50 p-4 rounded-lg">
-            <div className="flex items-center justify-between mb-2">
+        {nextMilestone && (() => {
+          console.log('UpgradeCard: Rendering next milestone progress:', nextMilestone);
+          return (
+            <div className="bg-purple-50 p-4 rounded-lg">
+              <div className="flex items-center justify-between mb-2">
               <span className="text-sm font-medium text-purple-700">
                 Progress to {nextMilestone.level}
               </span>
@@ -173,20 +266,23 @@ export const UpgradeCard: React.FC<UpgradeCardProps> = ({
                 style={{ width: `${progressToMilestone}%` }}
               ></div>
             </div>
-            <div className="text-xs text-purple-600">
-              {nextMilestone.remaining > 0 ? (
-                <span>{nextMilestone.remaining} more consecutive days needed</span>
-              ) : (
-                <span className="font-medium">✅ Requirements met! Ready to upgrade</span>
-              )}
+              <div className="text-xs text-purple-600">
+                {nextMilestone.remaining > 0 ? (
+                  <span>{nextMilestone.remaining} more consecutive days needed</span>
+                ) : (
+                  <span className="font-medium">✅ Requirements met! Ready to upgrade</span>
+                )}
+              </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
         
         {/* Upgrade Error Display */}
-        {upgradeError && (
-          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
-            <div className="flex items-start">
+        {upgradeError && (() => {
+          console.log('UpgradeCard: Rendering upgrade error:', upgradeError);
+          return (
+            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
+              <div className="flex items-start">
               <div className="flex-shrink-0">
                 <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
                   <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
@@ -197,51 +293,74 @@ export const UpgradeCard: React.FC<UpgradeCardProps> = ({
               </div>
               <div className="ml-auto pl-3">
                 <button
-                  onClick={onClearErrorAction}
+                  onClick={() => {
+                    console.log('UpgradeCard: Clear error button clicked');
+                    onClearErrorAction();
+                  }}
                   className="inline-flex text-red-400 hover:text-red-600"
                 >
                   <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
                     <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
                   </svg>
                 </button>
+                </div>
               </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
         
         {/* Upgrade Button */}
         {requirements ? (
           <button
-            disabled={upgradeLoading || !canUpgrade}
-            onClick={onUpgradeAction}
+            disabled={upgradeLoading || approvalLoading || !canUpgrade}
+            onClick={() => {
+              console.log('UpgradeCard: Upgrade button clicked', {
+                requirements,
+                canUpgrade,
+                upgradeLoading,
+                approvalLoading
+              });
+              onUpgradeAction();
+            }}
             className={`w-full px-4 py-3 rounded-lg font-medium transition-colors ${
-              canUpgrade && !upgradeLoading
+              canUpgrade && !upgradeLoading && !approvalLoading
                 ? 'bg-gradient-to-r from-purple-600 to-blue-600 text-white hover:from-purple-700 hover:to-blue-700 shadow-lg'
                 : 'bg-gray-300 text-gray-500 cursor-not-allowed'
             } disabled:opacity-60`}
           >
-            {upgradeLoading ? (
+            {approvalLoading ? (
+              <div className="flex items-center justify-center">
+                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
+                Approving tokens...
+              </div>
+            ) : upgradeLoading ? (
               <div className="flex items-center justify-center">
                 <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
                 Upgrading...
               </div>
-            ) : !canUpgrade ? (
-              `Need ${requirements.required} consecutive days (${consecutiveDays}/${requirements.required})`
-            ) : (
+            ) : canUpgrade ? (
               `Upgrade to ${requirements.nextLevel}`
+            ) : (
+              `Need ${requirements.required - requirements.current} more days`
             )}
           </button>
-        ) : (
-          <div className="text-center py-4">
-            <div className="text-lg font-semibold text-purple-600 mb-2">🎉</div>
-            <div className="text-sm text-gray-600">You&apos;ve reached the maximum level!</div>
-          </div>
-        )}
+        ) : (() => {
+          console.log('UpgradeCard: Rendering max level reached message');
+          return (
+            <div className="text-center py-4">
+              <div className="text-lg font-semibold text-purple-600 mb-2">🎉</div>
+              <div className="text-sm text-gray-600">You&apos;ve reached the maximum level!</div>
+            </div>
+          );
+        })()}
       </div>
       
       <div className="mt-6 pt-4 border-t border-gray-200">
         <button
-          onClick={onBuyENBAction}
+          onClick={() => {
+            console.log('UpgradeCard: Buy ENB button clicked');
+            onBuyENBAction();
+          }}
           className="w-full px-4 py-3 bg-orange-600 text-white rounded-lg hover:bg-orange-700 disabled:opacity-60 transition-colors"
         >
           Buy $ENB

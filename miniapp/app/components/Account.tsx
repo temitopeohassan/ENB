@@ -29,6 +29,7 @@ export const Account: React.FC<AccountProps> = ({ setActiveTabAction }) => {
     claimStatus,
     dailyClaimLoading,
     upgradeLoading,
+    approvalLoading,
     upgradeError,
     profileRefreshLoading,
     profileRefreshSuccess,
@@ -217,6 +218,7 @@ export const Account: React.FC<AccountProps> = ({ setActiveTabAction }) => {
                 walletAddress: profile.walletAddress
               }}
               upgradeLoading={upgradeLoading}
+              approvalLoading={approvalLoading}
               upgradeError={upgradeError}
               onUpgradeAction={handleUpgrade}
               onBuyENBAction={handleBuyENB}

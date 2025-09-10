@@ -6,11 +6,7 @@ interface UserProfile {
   walletAddress: string;
   membershipLevel: string;
   invitationCode: string | null;
-  invitationUsage?: {
-    totalUses: number;
-    maxUses: number;
-    remainingUses: number;
-  } | null;
+  totalUsersActivated?: number;
   isActivated: boolean;
 }
 
@@ -98,21 +94,13 @@ export const UserProfileCard: React.FC<UserProfileCardProps> = ({
             </div>
           </div>
         )}
-        {profile.invitationUsage && (
+        {profile.totalUsersActivated !== undefined && (
           <div>
-            <label className="text-sm font-medium text-gray-600">Invitation Usage</label>
+            <label className="text-sm font-medium text-gray-600">Total Users Activated</label>
             <div className="mt-2 p-3 bg-blue-50 rounded-lg">
-              <div className="flex justify-between items-center mb-2">
-                <span className="text-sm text-gray-600">Total Users Activated:</span>
-                <span className="font-semibold text-blue-600">{profile.invitationUsage.totalUses}</span>
-              </div>
-              <div className="flex justify-between items-center mb-2">
-                <span className="text-sm text-gray-600">Remaining Uses:</span>
-                <span className="font-semibold text-green-600">{profile.invitationUsage.remainingUses}</span>
-              </div>
               <div className="flex justify-between items-center">
-                <span className="text-sm text-gray-600">Max Uses:</span>
-                <span className="font-semibold text-gray-800">{profile.invitationUsage.maxUses}</span>
+                <span className="text-sm text-gray-600">Users Activated:</span>
+                <span className="font-semibold text-blue-600">{profile.totalUsersActivated}</span>
               </div>
             </div>
           </div>

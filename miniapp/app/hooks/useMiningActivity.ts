@@ -113,15 +113,7 @@ export const useMiningActivity = (walletAddress: string | undefined) => {
     fetchMiningActivity();
   }, [fetchMiningActivity]);
 
-  // Periodic refresh to keep mining activity data current (reduced interval for more responsiveness)
-  useEffect(() => {
-    if (walletAddress && miningActivity) {
-      const miningSyncInterval = setInterval(() => {
-        fetchMiningActivity(true);
-      }, 15000); // Refresh every 15 seconds instead of 30 for more responsiveness
-      return () => clearInterval(miningSyncInterval);
-    }
-  }, [walletAddress, miningActivity, fetchMiningActivity]);
+  // Mining activity refresh is now manual only - no automatic polling
 
   const refresh = useCallback(() => {
     fetchMiningActivity(true);
