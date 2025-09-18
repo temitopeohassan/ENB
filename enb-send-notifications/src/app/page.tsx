@@ -1,31 +1,64 @@
 'use client'
 
 import React, { useState } from 'react';
-import { AlertCircle, Send, CheckCircle, XCircle, Clock, Loader2 } from 'lucide-react';
+import { Send, CheckCircle, XCircle, Clock, Loader2 } from 'lucide-react';
+
+type FormData = {
+  fids: string;
+  title: string;
+  body: string;
+  targetUrl: string;
+  notificationId: string;
+};
+
+type NotificationResponse = {
+  error?: string;
+  details?: string;
+  stats?: {
+    successful?: number;
+  };
+};
+
+type Result = {
+  fid: number;
+  success: boolean;
+  status: number;
+  data: NotificationResponse;
+};
+
+type Summary = {
+  total: number;
+  successful: number;
+  failed: number;
+  successRate: number;
+};
 
 const NotificationSenderForm = () => {
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<FormData>({
     fids: '',
     title: '',
     body: '',
     targetUrl: '',
     notificationId: ''
   });
-  const [isLoading, setIsLoading] = useState(false);
-  const [results, setResults] = useState([]);
-  const [summary, setSummary] = useState(null);
 
-  const handleInputChange = (e) => {
+  const [isLoading, setIsLoading] = useState(false);
+  const [results, setResults] = useState<Result[]>([]);
+  const [summary, setSummary] = useState<Summary | null>(null);
+
+  const handleInputChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
+  ) => {
     const { name, value } = e.target;
     setFormData(prev => ({
       ...prev,
-      [name]: value
+      [name]: value,
     }));
   };
 
   const validateForm = () => {
-    const errors = [];
-    
+    const errors: string[] = [];
+
     if (!formData.fids.trim()) {
       errors.push('FIDs are required');
     } else {
@@ -33,25 +66,29 @@ const NotificationSenderForm = () => {
       if (fidLines.length > 99) {
         errors.push('Maximum 99 FIDs allowed');
       }
-      
+
       const invalidFids = fidLines.filter(line => {
         const fid = parseInt(line.trim());
         return isNaN(fid) || fid <= 0;
       });
-      
+
       if (invalidFids.length > 0) {
-        errors.push(`Invalid FIDs found: ${invalidFids.slice(0, 3).join(', ')}${invalidFids.length > 3 ? '...' : ''}`);
+        errors.push(
+          `Invalid FIDs found: ${invalidFids.slice(0, 3).join(', ')}${
+            invalidFids.length > 3 ? '...' : ''
+          }`
+        );
       }
     }
-    
+
     if (!formData.title.trim()) {
       errors.push('Title is required');
     }
-    
+
     if (!formData.body.trim()) {
       errors.push('Message body is required');
     }
-    
+
     if (!formData.targetUrl.trim()) {
       errors.push('Target URL is required');
     } else {
@@ -61,39 +98,39 @@ const NotificationSenderForm = () => {
         errors.push('Target URL must be a valid URL');
       }
     }
-    
+
     return errors;
   };
 
-  const sendNotification = async (fid) => {
-    const response = await fetch('https://enb-crushers.vercel.app/api/send-notification', {
+  const sendNotification = async (fid: string): Promise<Result> => {
+    const response = await fetch('/api/send-notification', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         fid: parseInt(fid),
         title: formData.title,
         body: formData.body,
         targetUrl: formData.targetUrl,
-        notificationId: formData.notificationId || undefined
-      })
+        notificationId: formData.notificationId || undefined,
+      }),
     });
 
-    const result = await response.json();
-    
+    const result: NotificationResponse = await response.json();
+
     return {
       fid: parseInt(fid),
       success: response.ok,
       status: response.status,
-      data: result
+      data: result,
     };
   };
 
   const handleSubmit = async () => {
     const validationErrors = validateForm();
     if (validationErrors.length > 0) {
-      alert('Please fix the following errors:\n' + validationErrors.join('\n'));
+      alert(
+        'Please fix the following errors:\n' + validationErrors.join('\n')
+      );
       return;
     }
 
@@ -101,28 +138,34 @@ const NotificationSenderForm = () => {
     setResults([]);
     setSummary(null);
 
-    const fids = formData.fids.trim().split('\n').map(line => line.trim()).filter(line => line);
-    const allResults = [];
+    const fids = formData.fids
+      .trim()
+      .split('\n')
+      .map(line => line.trim())
+      .filter(line => line);
+
+    const allResults: Result[] = [];
 
     try {
-      // Send notifications sequentially to avoid overwhelming the API
       for (const fid of fids) {
         try {
           const result = await sendNotification(fid);
           allResults.push(result);
-          setResults([...allResults]); // Update results in real-time
-        } catch (error) {
+          setResults([...allResults]);
+        } catch (error: unknown) {
+          const message =
+            error instanceof Error ? error.message : String(error);
+
           allResults.push({
             fid: parseInt(fid),
             success: false,
             status: 0,
-            data: { error: 'Network error: ' + error.message }
+            data: { error: 'Network error: ' + message },
           });
           setResults([...allResults]);
         }
       }
 
-      // Calculate summary
       const successful = allResults.filter(r => r.success).length;
       const failed = allResults.filter(r => !r.success).length;
       const total = allResults.length;
@@ -131,9 +174,8 @@ const NotificationSenderForm = () => {
         total,
         successful,
         failed,
-        successRate: Math.round((successful / total) * 100)
+        successRate: Math.round((successful / total) * 100),
       });
-
     } catch (error) {
       console.error('Unexpected error:', error);
     } finally {
@@ -141,7 +183,7 @@ const NotificationSenderForm = () => {
     }
   };
 
-  const getStatusIcon = (result) => {
+  const getStatusIcon = (result: Result) => {
     if (result.success) {
       return <CheckCircle className="w-4 h-4 text-green-500" />;
     } else if (result.status === 422) {
@@ -151,7 +193,7 @@ const NotificationSenderForm = () => {
     }
   };
 
-  const getStatusText = (result) => {
+  const getStatusText = (result: Result) => {
     if (result.success) {
       return `Success (${result.data.stats?.successful || 0} sent)`;
     } else if (result.status === 404) {
@@ -159,11 +201,15 @@ const NotificationSenderForm = () => {
     } else if (result.status === 422) {
       return 'Delivery failed (invalid/rate limited tokens)';
     } else {
-      return `Error (${result.status}): ${result.data.error || 'Unknown error'}`;
+      return `Error (${result.status}): ${
+        result.data.error || 'Unknown error'
+      }`;
     }
   };
 
-  const fidCount = formData.fids.trim() ? formData.fids.trim().split('\n').filter(line => line.trim()).length : 0;
+  const fidCount = formData.fids.trim()
+    ? formData.fids.trim().split('\n').filter(line => line.trim()).length
+    : 0;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
@@ -176,10 +222,13 @@ const NotificationSenderForm = () => {
 
           <div className="space-y-6">
             <div className="grid md:grid-cols-2 gap-6">
+              {/* FIDs */}
               <div className="md:col-span-2">
-                <label htmlFor="fids" className="block text-sm font-medium text-gray-700 mb-2">
-                  FIDs ({fidCount}/99)
-                  <span className="text-red-500">*</span>
+                <label
+                  htmlFor="fids"
+                  className="block text-sm font-medium text-gray-700 mb-2"
+                >
+                  FIDs ({fidCount}/99) <span className="text-red-500">*</span>
                 </label>
                 <textarea
                   id="fids"
@@ -192,12 +241,17 @@ const NotificationSenderForm = () => {
                   disabled={isLoading}
                 />
                 <p className="text-xs text-gray-500 mt-1">
-                  Enter up to 99 FIDs, one per line. Each must be a positive number.
+                  Enter up to 99 FIDs, one per line. Each must be a positive
+                  number.
                 </p>
               </div>
 
+              {/* Title */}
               <div>
-                <label htmlFor="title" className="block text-sm font-medium text-gray-700 mb-2">
+                <label
+                  htmlFor="title"
+                  className="block text-sm font-medium text-gray-700 mb-2"
+                >
                   Title <span className="text-red-500">*</span>
                 </label>
                 <input
@@ -212,8 +266,12 @@ const NotificationSenderForm = () => {
                 />
               </div>
 
+              {/* Target URL */}
               <div>
-                <label htmlFor="targetUrl" className="block text-sm font-medium text-gray-700 mb-2">
+                <label
+                  htmlFor="targetUrl"
+                  className="block text-sm font-medium text-gray-700 mb-2"
+                >
                   Target URL <span className="text-red-500">*</span>
                 </label>
                 <input
@@ -228,8 +286,12 @@ const NotificationSenderForm = () => {
                 />
               </div>
 
+              {/* Body */}
               <div className="md:col-span-2">
-                <label htmlFor="body" className="block text-sm font-medium text-gray-700 mb-2">
+                <label
+                  htmlFor="body"
+                  className="block text-sm font-medium text-gray-700 mb-2"
+                >
                   Message Body <span className="text-red-500">*</span>
                 </label>
                 <textarea
@@ -244,8 +306,12 @@ const NotificationSenderForm = () => {
                 />
               </div>
 
+              {/* Notification ID */}
               <div>
-                <label htmlFor="notificationId" className="block text-sm font-medium text-gray-700 mb-2">
+                <label
+                  htmlFor="notificationId"
+                  className="block text-sm font-medium text-gray-700 mb-2"
+                >
                   Notification ID (optional)
                 </label>
                 <input
@@ -261,6 +327,7 @@ const NotificationSenderForm = () => {
               </div>
             </div>
 
+            {/* Submit Button + Summary */}
             <div className="flex items-center gap-4">
               <button
                 type="button"
@@ -273,7 +340,9 @@ const NotificationSenderForm = () => {
                 ) : (
                   <Send className="w-4 h-4" />
                 )}
-                {isLoading ? 'Sending...' : `Send to ${fidCount} FID${fidCount !== 1 ? 's' : ''}`}
+                {isLoading
+                  ? 'Sending...'
+                  : `Send to ${fidCount} FID${fidCount !== 1 ? 's' : ''}`}
               </button>
 
               {summary && (
@@ -295,20 +364,20 @@ const NotificationSenderForm = () => {
           </div>
         </div>
 
-        {/* Results Section */}
+        {/* Results */}
         {(results.length > 0 || isLoading) && (
           <div className="bg-white rounded-lg shadow-lg p-6">
             <h2 className="text-xl font-semibold text-gray-900 mb-4">
               Results {results.length > 0 && `(${results.length})`}
             </h2>
-            
+
             <div className="space-y-2 max-h-96 overflow-y-auto">
               {results.map((result, index) => (
                 <div
                   key={index}
                   className={`flex items-center justify-between p-3 rounded-md border ${
-                    result.success 
-                      ? 'bg-green-50 border-green-200' 
+                    result.success
+                      ? 'bg-green-50 border-green-200'
                       : result.status === 422
                       ? 'bg-yellow-50 border-yellow-200'
                       : 'bg-red-50 border-red-200'
@@ -323,7 +392,7 @@ const NotificationSenderForm = () => {
                       {getStatusText(result)}
                     </span>
                   </div>
-                  
+
                   {result.data.details && (
                     <span className="text-xs text-gray-500 italic">
                       {result.data.details}
@@ -331,7 +400,7 @@ const NotificationSenderForm = () => {
                   )}
                 </div>
               ))}
-              
+
               {isLoading && results.length < fidCount && (
                 <div className="flex items-center gap-3 p-3 rounded-md border border-blue-200 bg-blue-50">
                   <Loader2 className="w-4 h-4 animate-spin text-blue-500" />
