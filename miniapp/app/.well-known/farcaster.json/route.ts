@@ -5,28 +5,28 @@ export async function GET() {
     accountAssociation: {
       header:
         'eyJmaWQiOjczODU3NCwidHlwZSI6ImN1c3RvZHkiLCJrZXkiOiIweGU1MDkxZDU0NmI1ODI3NDA1OTMzMjU0QUZiNmU1M2VEOEE0NzEzRjEifQ',
-      payload: 'eyJkb21haW4iOiJlbmItY3J1c2hlcnMudmVyY2VsLmFwcCJ9',
+      payload: 'eyJkb21haW4iOiJtaW5pbmcuZW5iLmZ1biJ9',
       signature:
-        'MHhiMWEzNmUzOGJjNzA2MmMwNGYwMWJmYWYwOWIzMTQ2MGIwY2MzMTAxM2IxODllOTE3YTViYmJmY2E4YTFlNTI0NjJiOTc1NjI4OTkwZTUzOTBhNTE2MTEzMjA0ZDMxNTJhMjRmMmY0NGUwYWZjMGUwOTU0MDYyNzEyNzA1NTM2MTFj',
+        'MHhhZmY4NzAwMTdmZmQyMjQ0N2M0YTdhOThmN2MwNzA3N2EyZDg4NDJhOTY5NWEyMGFiMTM5OTU5NDFjM2YxNTMzNjYzODUwNWUwYTcyM2E1YTc0YjZhMDJjOGRmYTg1ZTllYmI3ODZjZjdkYWVjYWUyMDI2MTQ4N2NhMjEzYjE1NzFj',
     },
     frame: {
       version: '1',
       name: 'ENB Mining',
-      iconUrl: 'https://enb-crushers.vercel.app/icon.png',
-      splashImageUrl: 'https://enb-crushers.vercel.app/splash.png',
+      iconUrl: 'https://mining.enb.fun/icon.png',
+      splashImageUrl: 'https://mining.enb.fun/splash.png',
       splashBackgroundColor: '#A93445',
-      homeUrl: 'https://enb-crushers.vercel.app/',
-      imageUrl: 'https://enb-crushers.vercel.app/image.png',
+      homeUrl: 'https://mining.enb.fun/',
+      imageUrl: 'https://mining.enb.fun/image.png',
       buttonTitle: 'Start Mining',
       heroImageUrl:
-        'https://enb-crushers.vercel.app/image.png',
-      webhookUrl: 'https://enb-crushers.vercel.app/api/webhook',
+        'https://mining.enb.fun/image.png',
+      webhookUrl: 'https://mining.enb.fun/api/webhook',
       subtitle: 'Fast, Simple, Onchain',
       description: 'earn ENB daily on Farcaster',
       "screenshotUrls": [
-      "https://enb-crushers.vercel.app/IMG_1781.jpg",
-      "https://enb-crushers.vercel.app/IMG_1782.jpg",
-      "https://enb-crushers.vercel.app/IMG_1780.jpg"
+      "https://mining.enb.fun/IMG_1781.jpg",
+      "https://mining.enb.fun/IMG_1782.jpg",
+      "https://mining.enb.fun/IMG_1780.jpg"
     ],
       primaryCategory: 'finance',
      tags: [
@@ -39,8 +39,8 @@ export async function GET() {
       ogTitle: 'ENB Mining',
       ogDescription: 'earn ENB daily on Farcaster',
       ogImageUrl:
-        'https://enb-crushers.vercel.app/og-image.png',
-      castShareUrl: 'https://enb-crushers.vercel.app/',
+        'https://mining.enb.fun/og-image.png',
+      castShareUrl: 'https://mining.enb.fun/',
     },
    baseBuilder: {
     "allowedAddresses": ["0x63526F05d9237DA102bce72960e13Ac4F2A3c3A9"]

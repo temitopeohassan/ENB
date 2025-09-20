@@ -103,7 +103,7 @@ const NotificationSenderForm = () => {
   };
 
   const sendNotification = async (fid: string): Promise<Result> => {
-    const response = await fetch('/api/send-notification', {
+    const response = await fetch('https://mining.enb.fun/api/send-notification', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
