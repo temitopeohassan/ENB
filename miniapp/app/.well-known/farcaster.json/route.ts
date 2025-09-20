@@ -3,11 +3,9 @@ import { NextResponse } from 'next/server';
 export async function GET() {
   const config = {
     accountAssociation: {
-      header:
-        'eyJmaWQiOjczODU3NCwidHlwZSI6ImN1c3RvZHkiLCJrZXkiOiIweGU1MDkxZDU0NmI1ODI3NDA1OTMzMjU0QUZiNmU1M2VEOEE0NzEzRjEifQ',
-      payload: 'eyJkb21haW4iOiJlbmItY3J1c2hlcnMudmVyY2VsLmFwcCJ9',
-      signature:
-        'MHhiMWEzNmUzOGJjNzA2MmMwNGYwMWJmYWYwOWIzMTQ2MGIwY2MzMTAxM2IxODllOTE3YTViYmJmY2E4YTFlNTI0NjJiOTc1NjI4OTkwZTUzOTBhNTE2MTEzMjA0ZDMxNTJhMjRmMmY0NGUwYWZjMGUwOTU0MDYyNzEyNzA1NTM2MTFj',
+    "header": "eyJmaWQiOjczODU3NCwidHlwZSI6ImN1c3RvZHkiLCJrZXkiOiIweGU1MDkxZDU0NmI1ODI3NDA1OTMzMjU0QUZiNmU1M2VEOEE0NzEzRjEifQ",
+    "payload": "eyJkb21haW4iOiJtaW5pbmcuZW5iLmZ1biJ9",
+    "signature": "MHhhZmY4NzAwMTdmZmQyMjQ0N2M0YTdhOThmN2MwNzA3N2EyZDg4NDJhOTY5NWEyMGFiMTM5OTU5NDFjM2YxNTMzNjYzODUwNWUwYTcyM2E1YTc0YjZhMDJjOGRmYTg1ZTllYmI3ODZjZjdkYWVjYWUyMDI2MTQ4N2NhMjEzYjE1NzFj",
     },
     frame: {
       version: '1',
