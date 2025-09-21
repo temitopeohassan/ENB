@@ -3,9 +3,9 @@ import { NextResponse } from 'next/server';
 export async function GET() {
   const config = {
     accountAssociation: {
-   "header": "eyJmaWQiOjczODU3NCwidHlwZSI6ImN1c3RvZHkiLCJrZXkiOiIweGU1MDkxZDU0NmI1ODI3NDA1OTMzMjU0QUZiNmU1M2VEOEE0NzEzRjEifQ",
-    "payload": "eyJkb21haW4iOiJlbmItY3J1c2hlcnMudmVyY2VsLmFwcCJ9",
-    "signature": "MHhiMWEzNmUzOGJjNzA2MmMwNGYwMWJmYWYwOWIzMTQ2MGIwY2MzMTAxM2IxODllOTE3YTViYmJmY2E4YTFlNTI0NjJiOTc1NjI4OTkwZTUzOTBhNTE2MTEzMjA0ZDMxNTJhMjRmMmY0NGUwYWZjMGUwOTU0MDYyNzEyNzA1NTM2MTFj"
+   "header": "eyJmaWQiOjczODU3NCwidHlwZSI6ImF1dGgiLCJrZXkiOiIweGRiMjk3OWZkRjY4OTU3MUREMTYyN0E2MzNkNjk3MTZEMzlkOTE5RGMifQ",
+    "payload": "eyJkb21haW4iOiJtaW5pbmcuZW5iLmZ1biJ9",
+    "signature": "slBX9ir3ehRseMgdNhlym/QvlTlFJFURpYM9fjhPhaFRb2KdOWTKahrgD2V+N14SsiljXJCHKLXaxUJpQuXx0hs="
     },
     frame: {
       version: '1',
