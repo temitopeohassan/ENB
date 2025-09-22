@@ -251,7 +251,7 @@ export const useAccountLogic = () => {
   };
 
   const enbAmount = getEnbAmount(profile?.membershipLevel || 'Based');
-  const appUrl = "https://enb-crushers.vercel.app";
+  const appUrl = "https://mining.enb.fun";
 
   try {
     // Open the cast composer with the daily claim message
@@ -273,7 +273,7 @@ export const useAccountLogic = () => {
 
 
 const handleUpgradeWarpcastShare = async () => {
-  const appUrl = "https://enb-crushers.vercel.app";
+  const appUrl = "https://mining.enb.fun";
 
   try {
     // Open the cast composer with the app embed
@@ -296,7 +296,7 @@ const handleUpgradeWarpcastShare = async () => {
  const handleInvitationCode = async () => {
   if (!profile?.invitationCode) return;
 
-  const appUrl = "https://enb-crushers.vercel.app";
+  const appUrl = "https://mining.enb.fun";
 
   try {
     // Open the cast composer (don’t care about return value)
