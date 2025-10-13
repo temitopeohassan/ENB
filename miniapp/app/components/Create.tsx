@@ -1,17 +1,10 @@
 'use client';
 
 import { useState, useEffect, FormEvent } from 'react';
-import { useAccount, useWriteContract } from 'wagmi';
+import { useAccount, useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
 import { ENB_MINI_APP_ABI, ENB_MINI_APP_ADDRESS } from '../constants/enbMiniAppAbi';
 import { API_BASE_URL } from '../config';
-import {
-  createPublicClient,
-  encodeFunctionData,
-  http,
-  EIP1193Provider,
-  Hash
-} from 'viem';
-import { base } from 'viem/chains';
+import { type Address } from 'viem';
 import { Button } from "./Button";
 import { Icon } from "./Icon";
 import { sdk } from '@farcaster/frame-sdk';
@@ -24,7 +17,10 @@ interface CreateProps {
 
 export const Create: React.FC<CreateProps> = ({ setActiveTabAction }) => {
   const { address, isConnected } = useAccount();
-  const { writeContractAsync } = useWriteContract();
+  const { writeContractAsync, data: txHash } = useWriteContract();
+  const { isSuccess: isConfirmed } = useWaitForTransactionReceipt({
+    hash: txHash,
+  });
 
   const [accountCreated, setAccountCreated] = useState(false);
   const [hasUnactivatedAccount, setHasUnactivatedAccount] = useState(false);
@@ -35,6 +31,7 @@ export const Create: React.FC<CreateProps> = ({ setActiveTabAction }) => {
   const [showCreatedModal, setShowCreatedModal] = useState(false);
   const [showActivatedModal, setShowActivatedModal] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [pendingTxHash, setPendingTxHash] = useState<string | null>(null);
 
   useEffect(() => {
     const checkExistingAccount = async () => {
@@ -104,121 +101,93 @@ export const Create: React.FC<CreateProps> = ({ setActiveTabAction }) => {
     console.log('✅ Wallet connected, proceeding with account creation');
 
     try {
-      console.log('🔧 Creating public client...');
-      const publicClient = createPublicClient({ 
-        chain: base, 
-        transport: http() 
-      });
-      console.log('✅ Public client created');
-
-      // Prepare transaction data
-      console.log('📝 Preparing transaction data...');
-      const baseTxData = encodeFunctionData({
+      console.log('💸 Sending transaction via wagmi...');
+      
+      // Use wagmi writeContractAsync - works with all wallets (Farcaster, MetaMask, WalletConnect, etc.)
+      const hash = await writeContractAsync({
+        address: ENB_MINI_APP_ADDRESS as Address,
         abi: ENB_MINI_APP_ABI,
         functionName: 'createAccount',
-        args: []
+        args: [],
       });
-      console.log('✅ Transaction data prepared:', baseTxData);
-
-      // Estimate gas
-      console.log('⛽ Estimating gas...');
-      let gasEstimate: bigint;
-      try {
-        gasEstimate = await publicClient.estimateGas({
-          account: address,
-          to: ENB_MINI_APP_ADDRESS,
-          data: baseTxData
-        });
-        // Add 20% buffer for gas estimation
-        gasEstimate = gasEstimate + (gasEstimate * BigInt(20)) / BigInt(100);
-        console.log('✅ Gas estimated:', gasEstimate.toString());
-      } catch (error) {
-        console.warn('⚠️ Gas estimation failed, using fallback:', error);
-        gasEstimate = BigInt(150000); // Increased fallback
-        console.log('🔄 Using fallback gas:', gasEstimate.toString());
-      }
-
-      // Execute transaction
-      console.log('💸 Executing transaction...');
-      let txHash: Hash;
       
-      if (window.ethereum) {
-        console.log('🔗 Using window.ethereum for transaction');
-        const txParams = {
-          from: address,
-          to: ENB_MINI_APP_ADDRESS as `0x${string}`,
-          data: baseTxData,
-          gas: `0x${gasEstimate.toString(16)}` as `0x${string}`
-        };
-        console.log('📋 Transaction params:', txParams);
-        
-        txHash = await (window.ethereum as EIP1193Provider).request({
-          method: 'eth_sendTransaction',
-          params: [txParams]
-        }) as Hash;
-        console.log('✅ Transaction sent via window.ethereum, hash:', txHash);
-      } else {
-        console.log('🔗 Using wagmi writeContract as fallback');
-        txHash = await writeContractAsync({
-          address: ENB_MINI_APP_ADDRESS,
-          abi: ENB_MINI_APP_ABI,
-          functionName: 'createAccount',
-          args: [],
-        });
-        console.log('✅ Transaction sent via wagmi, hash:', txHash);
-      }
-
-      // Wait for blockchain confirmation
+      console.log('✅ Transaction sent, hash:', hash);
+      setPendingTxHash(hash);
+      
       console.log('⏳ Waiting for transaction confirmation...');
-      const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
-      console.log('✅ Transaction confirmed in block:', receipt.blockNumber);
-
-      // Sync with backend
-      console.log('🔄 Syncing with backend...');
-      const backendPayload = { 
-        walletAddress: address, 
-        transactionHash: txHash 
-      };
-      console.log('📤 Backend payload:', backendPayload);
+      console.log('   This may take a few moments...');
       
-      const backendResponse = await fetch(`${API_BASE_URL}/api/create-account`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(backendPayload)
-      });
-
-      console.log('📥 Backend response status:', backendResponse.status);
+      // The useWaitForTransactionReceipt hook will handle the waiting
+      // We'll continue in the useEffect that watches for isConfirmed
       
-      if (!backendResponse.ok) {
-        const errorData = await backendResponse.json();
-        console.error('❌ Backend sync failed:', errorData);
-        throw new Error(errorData.error || 'Backend sync failed');
-      }
-
-      const backendData = await backendResponse.json();
-      console.log('✅ Backend sync successful:', backendData);
-
-      setShowCreatedModal(true);
-      setAccountCreated(true);
-      setHasUnactivatedAccount(true);
-      console.log('🎉 Account creation completed successfully');
     } catch (error) {
       console.error('❌ Account creation failed:', error);
       const errorMessage = error instanceof Error 
         ? error.message 
         : 'Failed to create account';
       setError(errorMessage);
-    } finally {
       setIsCreatingAccount(false);
-      console.log('🏁 Account creation process finished');
+      console.log('🏁 Account creation process finished with error');
     }
   };
+
+  // Watch for transaction confirmation
+  useEffect(() => {
+    const handleConfirmation = async () => {
+      if (isConfirmed && pendingTxHash) {
+        console.log('✅ Transaction confirmed!');
+        
+        try {
+          // Sync with backend
+          console.log('🔄 Syncing with backend...');
+          const backendPayload = { 
+            walletAddress: address, 
+            transactionHash: pendingTxHash 
+          };
+          console.log('📤 Backend payload:', backendPayload);
+          
+          const backendResponse = await fetch(`${API_BASE_URL}/api/create-account`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(backendPayload)
+          });
+
+          console.log('📥 Backend response status:', backendResponse.status);
+          
+          if (!backendResponse.ok) {
+            const errorData = await backendResponse.json();
+            console.error('❌ Backend sync failed:', errorData);
+            throw new Error(errorData.error || 'Backend sync failed');
+          }
+
+          const backendData = await backendResponse.json();
+          console.log('✅ Backend sync successful:', backendData);
+
+          setShowCreatedModal(true);
+          setAccountCreated(true);
+          setHasUnactivatedAccount(true);
+          setPendingTxHash(null);
+          console.log('🎉 Account creation completed successfully');
+        } catch (error) {
+          console.error('❌ Backend sync failed:', error);
+          const errorMessage = error instanceof Error 
+            ? error.message 
+            : 'Failed to sync with backend';
+          setError(errorMessage);
+        } finally {
+          setIsCreatingAccount(false);
+        }
+      }
+    };
+
+    handleConfirmation();
+  }, [isConfirmed, pendingTxHash, address]);
 
   const handleCreatedWarpcastShare = async () => {
     try {
       await sdk.actions.composeCast({
         text: "I just created my $ENB mining account. I am looking for an account activation code",
-        embeds: ["https://mining.enb.fun"]
+        embeds: ["https://enb-crushers.vercel.app"]
       });
     } catch (error) {
       console.error('Failed to share on Farcaster:', error);
@@ -229,7 +198,7 @@ export const Create: React.FC<CreateProps> = ({ setActiveTabAction }) => {
     try {
       await sdk.actions.composeCast({
         text: "I Just Activated My Base Layer Account. I am now earning $ENB everyday! Join me",
-        embeds: ["https://mining.enb.fun"]
+        embeds: ["https://enb-crushers.vercel.app"]
       });
     } catch (error) {
       console.error('Failed to share on Farcaster:', error);

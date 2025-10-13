@@ -118,7 +118,7 @@ export const InvitationStatsCard: React.FC<StatsCardProps> = ({ walletAddress })
       fetchBackendUsage();
       setLoading(false);
     }
-  }, [walletAddress]);
+  }, [walletAddress, checkAndResetDailyCount, fetchBackendUsage]);
 
   // Check for date change every minute to handle UTC reset
   useEffect(() => {
@@ -128,7 +128,7 @@ export const InvitationStatsCard: React.FC<StatsCardProps> = ({ walletAddress })
     }, 60000); // Check every minute
 
     return () => clearInterval(interval);
-  }, [walletAddress]);
+  }, [checkAndResetDailyCount]);
 
   if (loading) {
     return (

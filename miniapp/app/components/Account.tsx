@@ -24,8 +24,6 @@ export const Account: React.FC<AccountProps> = ({ setActiveTabAction }) => {
     profile,
     loading,
     error,
-    enbBalance,
-    enbBalanceLoading,
     claimStatus,
     dailyClaimLoading,
     upgradeLoading,
@@ -188,8 +186,6 @@ export const Account: React.FC<AccountProps> = ({ setActiveTabAction }) => {
 
         {/* Token Info */}
         <TokenBalanceCard
-          enbBalance={enbBalance}
-          enbBalanceLoading={enbBalanceLoading}
           onInformationClick={handleInformation}
         />
 

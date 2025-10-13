@@ -1,18 +1,19 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { useAccount } from 'wagmi';
+import { useAccount, useWriteContract } from 'wagmi';
 import { ENB_TOKEN_ABI, ENB_TOKEN_ADDRESS, ENB_MINI_APP_ADDRESS } from '../constants/enbMiniAppAbi';
 import { API_BASE_URL } from '../config';
-import { createPublicClient, http } from 'viem';
+import { createPublicClient, http, type Address } from 'viem';
 import { base } from 'viem/chains';
 import { sdk } from '@farcaster/miniapp-sdk';
-import { ethers } from 'ethers';
 import { UserProfile, ClaimStatus, TipStep } from '../types/account';
+
 
 
 export const useAccountLogic = () => {
   const { address } = useAccount();
+  const { writeContractAsync } = useWriteContract();
   
   // State
   const [showDailyClaimModal, setShowDailyClaimModal] = useState(false);
@@ -251,7 +252,7 @@ export const useAccountLogic = () => {
   };
 
   const enbAmount = getEnbAmount(profile?.membershipLevel || 'Based');
-  const appUrl = "https://mining.enb.fun";
+  const appUrl = "https://enb-crushers.vercel.app";
 
   try {
     // Open the cast composer with the daily claim message
@@ -273,7 +274,7 @@ export const useAccountLogic = () => {
 
 
 const handleUpgradeWarpcastShare = async () => {
-  const appUrl = "https://mining.enb.fun";
+  const appUrl = "https://enb-crushers.vercel.app";
 
   try {
     // Open the cast composer with the app embed
@@ -296,7 +297,7 @@ const handleUpgradeWarpcastShare = async () => {
  const handleInvitationCode = async () => {
   if (!profile?.invitationCode) return;
 
-  const appUrl = "https://mining.enb.fun";
+  const appUrl = "https://enb-crushers.vercel.app";
 
   try {
     // Open the cast composer (don’t care about return value)
@@ -369,27 +370,25 @@ const handleUpgradeWarpcastShare = async () => {
           try {
             const approvalAmount = requiredTokensWei;
             
-            // Request approval transaction using Farcaster SDK wallet
-            if (!sdk.wallet.ethProvider) {
-              throw new Error('No wallet found. Please connect your wallet through Farcaster.');
-            }
+            console.log('📝 Approving ENB tokens...');
+            console.log('   Amount:', requiredTokens, 'ENB');
+            console.log('   Spender:', ENB_MINI_APP_ADDRESS);
             
-            const approvalTx = await sdk.wallet.ethProvider.request({
-              method: 'eth_sendTransaction',
-              params: [{
-                from: address,
-                to: ENB_TOKEN_ADDRESS,
-                data: new ethers.Interface([
-                  'function approve(address spender, uint256 amount) returns (bool)'
-                ]).encodeFunctionData('approve', [
-                  ENB_MINI_APP_ADDRESS,
-                  `0x${approvalAmount.toString(16)}`
-                ]) as `0x${string}`
-              }]
+            // Use wagmi writeContractAsync for approval - works with all wallets
+            const approvalHash = await writeContractAsync({
+              address: ENB_TOKEN_ADDRESS as Address,
+              abi: ENB_TOKEN_ABI,
+              functionName: 'approve',
+              args: [ENB_MINI_APP_ADDRESS as Address, approvalAmount],
             });
 
+            console.log('✅ Approval transaction sent, hash:', approvalHash);
+            console.log('⏳ Waiting for approval confirmation...');
+            
             // Wait for approval confirmation
-            await publicClient.waitForTransactionReceipt({ hash: approvalTx as `0x${string}` });
+            await publicClient.waitForTransactionReceipt({ hash: approvalHash });
+            
+            console.log('✅ Approval confirmed!');
           } finally {
             setApprovalLoading(false);
           }
@@ -471,6 +470,51 @@ const handleUpgradeWarpcastShare = async () => {
       }
 
       const userProfile: UserProfile = await res.json();
+      
+      // Check and update FID if needed
+      try {
+        const context = await sdk.context;
+        const isRecord = (obj: unknown): obj is Record<string, unknown> =>
+          typeof obj === "object" && obj !== null && !Array.isArray(obj);
+
+        let currentFid: number | null = null;
+        if (isRecord(context)) {
+          const userVal = context["user"];
+          if (isRecord(userVal) && typeof userVal["fid"] === "number") {
+            currentFid = userVal["fid"] as number;
+          }
+        }
+
+        // Update FID if it's different or missing in the profile
+        if (currentFid && userProfile.fid !== currentFid) {
+          console.log(`🔄 Updating FID for ${address}: ${currentFid} (current in DB: ${userProfile.fid})`);
+          
+          try {
+            const updateResponse = await fetch(`${API_BASE_URL}/api/update-fid`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                walletAddress: address,
+                fid: currentFid
+              }),
+            });
+
+            if (updateResponse.ok) {
+              const result = await updateResponse.json();
+              console.log('✅ FID updated successfully in Account component:', result);
+              // Update the local profile with the new FID
+              userProfile.fid = currentFid;
+            }
+          } catch (fidError) {
+            console.error('❌ Error updating FID:', fidError);
+          }
+        }
+      } catch (fidCheckError) {
+        console.error('Error checking/updating FID:', fidCheckError);
+        // Continue with account loading even if FID update fails
+      }
       
       if (!userProfile.isActivated) {
         setProfile(userProfile);
