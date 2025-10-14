@@ -1,6 +1,5 @@
 'use client';
 
-import Image from 'next/image';
 import { useFrame } from '../farcaster-provider';
 
 interface UserProfile {
@@ -47,13 +46,12 @@ export const UserProfileCard: React.FC<UserProfileCardProps> = ({
         {context?.user ? (
           <>
             {context?.user?.pfpUrl && (
-              <Image
+              <img
                 src={context?.user?.pfpUrl}
                 className="w-14 h-14 rounded-full"
                 alt="User Profile"
                 width={56}
                 height={56}
-                unoptimized
               />
             )}
           </>

@@ -18,7 +18,7 @@ function debugLog(action: string, data?: unknown) {
 
 // ✅ Add CORS headers helper
 function withCors(response: NextResponse) {
-  response.headers.set("Access-Control-Allow-Origin", "http://localhost:3000");
+  response.headers.set("Access-Control-Allow-Origin", "https://enb-send-notifications.vercel.app");
   response.headers.set("Access-Control-Allow-Methods", "POST, OPTIONS");
   response.headers.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
   return response;
