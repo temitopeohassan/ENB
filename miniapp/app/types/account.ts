@@ -13,7 +13,6 @@ export interface UserProfile {
   totalEarned: number;
   joinDate?: string;
   isActivated: boolean;
-  fid?: number | null;
 }
 
 export interface ClaimStatus {
